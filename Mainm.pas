@@ -70,14 +70,13 @@ type
     FUserMode: TUserMode;
     FMadUser, FRollMode, FEquipMode, FMadPrinter: Boolean;
     FCurrentRollId, FCurrentUniqRollID, FCurrentOrderId, FCurrentEquipId, FCurrentEquipName: string;
-    FLastRollId, FLastRollAction, FCurrentBlockId: Integer;
-    FLastRollIsFinished, FBlockIsAssignedBegin, FBlockIsAssignedEnd, FBlockEndLessThanBegin,
+    FLastRollAction, FCurrentBlockId: Integer;
+    FLastRollIsFinished, FBlockIsAssignedBegin, FBlockIsAssignedEnd,
       FBlocksWorkflowIsStarted: Boolean;
     FCurrentEquipAction: string;
     FRollInfoJson, FRollStatusJson, FBlockInfoJson: string;
     FIsAfterLogin: Boolean;
     FRashodnikId: Integer;
-    FRawRollData: string;
     FInfoMode, FBlockMode, FBlockAssignMode, FBlockWorkflowMode: Boolean;
     procedure FastExecSql(ASQL: string);
     procedure FastShowCustomScanner;
@@ -96,11 +95,11 @@ type
     procedure ReSetInfoMode;
     procedure SetBlockAssignMode(ABeginAssign: Boolean);
     procedure SetBlockWorkflowMode(ABegin: Boolean);
-    procedure ReSetBlockAssignMode;
+    //procedure ReSetBlockAssignMode;
     procedure RollCompleteEffect;
     procedure UpdateEquipService(AParams: TUniStrings);
     procedure ToggleCamera(AOnOff: Boolean);
-    procedure ShowInfoPanel(ATableDataJson: string);
+    //procedure ShowInfoPanel(ATableDataJson: string);
     procedure SetNodeStatus(AStatus: string; ANodeName: string);
     procedure SetElementSvg(const AID, ASvgCode: string);
     procedure RollActionButtons(ABeginBtn, AEndBtn: Boolean);
@@ -128,9 +127,9 @@ type
     procedure GetRollStatus(AEquipId: string);
     function GetPersonProf: Boolean;
     function IsRollFinished: Boolean;
-    function IsLastRollFinished(AEquipId, AUnicRollId: string): Boolean;
-    function IsDataMatrixEnabled: Boolean;
-    function IsLastBlockAssigned: Boolean;
+    //function IsLastRollFinished(AEquipId, AUnicRollId: string): Boolean;
+    //function IsDataMatrixEnabled: Boolean;
+    //function IsLastBlockAssigned: Boolean;
     procedure CheckIsLocalAccess;
   end;
 
@@ -510,11 +509,13 @@ begin
   FBlockAssignMode := True;
 end;
 
+{
 procedure TMainmForm.ReSetBlockAssignMode;
 begin
   SetElementText('block_end_title', 'Статус рулона');
   FBlockAssignMode := False;
 end;
+}
 
 procedure TMainmForm.ReSetInfoMode;
 begin
@@ -594,10 +595,12 @@ begin
   SetSidePanelState(False)
 end;
 
+{
 procedure TMainmForm.ShowInfoPanel(ATableDataJson: string);
 begin
   UniSession.AddJS(pnlScan.JSName + '.renderTable(''' + ATableDataJson + ''');');
 end;
+}
 
 procedure TMainmForm.ShowProcessPanel(AShow: Boolean);
 begin
@@ -786,9 +789,9 @@ begin
 end;
 
 function TMainmForm.GetUserMode(const AUserId: string): TUserMode;
-var
-  LRights: TArray<string>;
-  R: string;
+//var
+//  LRights: TArray<string>;
+//  R: string;
 begin
   Result := umAdmin;
 //  LRights := ACCESS_RIGHTS.Split([';']);
@@ -1195,15 +1198,24 @@ begin
   end;
 end;
 
+{
+
 function TMainmForm.IsDataMatrixEnabled: Boolean;
 begin
   Result := FPersonProfId = DATAMATRIX_PROF_ID;
 end;
 
+}
+
+{
 function TMainmForm.IsLastBlockAssigned: Boolean;
 begin
   Result := FBlockIsAssignedBegin
 end;
+
+}
+
+{
 
 function TMainmForm.IsLastRollFinished(AEquipId, AUnicRollId: string): Boolean;
 begin
@@ -1222,6 +1234,8 @@ begin
     end;
   end;
 end;
+
+}
 
 function TMainmForm.IsRollFinished: Boolean;
 begin
