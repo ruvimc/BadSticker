@@ -849,6 +849,7 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
     ToggleCamera(False);
     FRollMode := False;
     FEquipMode := False;
+    FBlockMode := False;
   end;
 
   procedure AterInfo;
@@ -870,7 +871,8 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
 
 begin
   if EventName = '_camLongPress' then
-    ToggleCamera(False)
+    // сброс после долгого нажатия
+    AfterStart
   else
   if EventName = 'scanSuccess' then
   begin
