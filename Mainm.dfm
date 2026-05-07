@@ -2059,8 +2059,8 @@ object MainmForm: TMainmForm
   object qryEquipFixList: TMyQuery
     SQL.Strings = (
       
-        'SELECT e.equipment_name, efs.name, efl.datecreate FROM equipment' +
-        '_fix_list efl'
+        'SELECT e.equipment_name, efs.name, efl.datecreate, efl.equip_fix' +
+        '_id FROM equipment_fix_list efl'
       'LEFT JOIN equipment e ON e.equipment_id = efl.equip_id'
       
         'LEFT JOIN equipment_fix_statuses efs ON efl.equip_fix_id = efs.i' +

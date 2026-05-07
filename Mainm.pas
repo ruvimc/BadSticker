@@ -17,6 +17,8 @@ type
 
   TEquipAction = (eqaStart, eqaStop);
 
+  TEquipFixStatus = (efsNone, efsFixBegin, efsFixEnd);
+
   TUserMode = (umNone, umAdmin, umPrint, umBlock, umOTP, umLegacy);
 
   TQRData = record
@@ -752,6 +754,8 @@ begin
   qryEquipFixStatuses.Close;
   qryEquipFixStatuses.Open;
   FEquipFixListJson := qryEquipFixList.ToJSON(['equipment_name', 'name', 'datecreate']);
+  qryEquipFixList.First;
+  FFixId := qryEquipFixList.FieldByName('equip_fix_id').AsInteger;
   FEquipFixStatusesJson := qryEquipFixStatuses.ToJSON(['id', 'name']);
 end;
 
@@ -1180,6 +1184,15 @@ begin
       FCurrentEquipAction := LQR.ActionCode;
       EquipEventToRollStatus(FCurrentEquipAction.ToInteger - 1);
       FCurrentEquipId := LQR.EquipId;
+      GetEquipFixList(FCurrentEquipId);
+      if FFixId = Ord(efsFixBegin) then
+      begin
+        Toast('Оборудование в ремонте');
+        FBlockMode := False;
+        ToggleCamera(False);
+        FFixId := 0;
+        Exit;
+      end;
       FCurrentEquipName := GetEquipName(FCurrentEquipId);
       SetEquipCaption(FCurrentEquipName);
       RollActionButtons(True, False);
