@@ -73,7 +73,7 @@ type
     FLastRollAction, FCurrentBlockId: Integer;
     FLastRollIsFinished, FBlockIsAssignedBegin, FBlockIsAssignedEnd,
       FBlocksWorkflowIsStarted: Boolean;
-    FCurrentEquipAction: string;
+    FCurrentEquipAction, FCurrentEquipActionPrefix: string;
     FRollInfoJson, FRollStatusJson, FBlockInfoJson: string;
     FIsAfterLogin: Boolean;
     FRashodnikId: Integer;
@@ -131,6 +131,7 @@ type
     //function IsDataMatrixEnabled: Boolean;
     //function IsLastBlockAssigned: Boolean;
     procedure CheckIsLocalAccess;
+    procedure SetWorkflowCaption(ACaption: string);
   end;
 
   TDatasetHelper = class helper for TMyQuery
@@ -441,6 +442,11 @@ begin
   SetHTMLNodeText('roll', AText);
 end;
 
+procedure TMainmForm.SetWorkflowCaption(ACaption: string);
+begin
+  SetElementText('block_end_title', ACaption);
+end;
+
 procedure TMainmForm.SetHTMLNodeText(ANodeName, AText: string);
 begin
   UniSession.AddJS(pnlScan.JSName + '.setNodeText("'+ANodeName+'", "'+AText+'");');
@@ -519,7 +525,7 @@ end;
 
 procedure TMainmForm.ReSetInfoMode;
 begin
-  SetElementText('block_end_title', 'Статус рулона');
+  SetElementText('block_end_title', 'Работа с рулоном');
   SetElementText('btn_action_start', 'Начать');
   FInfoMode := False;
 end;
@@ -1113,6 +1119,7 @@ begin
       FEquipMode := True;
       SetElementSvg('node_eq', SVG_EQUIP);
       FCurrentEquipAction := LQR.ActionCode;
+      EquipEventToRollStatus(FCurrentEquipAction.ToInteger - 1);
       FCurrentEquipId := LQR.EquipId;
       FCurrentEquipName := GetEquipName(FCurrentEquipId);
       SetEquipCaption(FCurrentEquipName);
@@ -1136,7 +1143,7 @@ begin
       EquipStatusOn;
       SetEquipCaption(FCurrentEquipName);
       ReSetInfoMode;
-
+      SetWorkflowCaption(FCurrentEquipActionPrefix);
       FRollMode := False;
       FBlockMode := False;
       Exit;
@@ -1308,6 +1315,7 @@ begin
   qryStatusMap.Close;
   qryStatusMap.ParamByName('rsEqId').AsInteger := AEventActionId;
   qryStatusMap.Open;
+  FCurrentEquipActionPrefix := qryStatusMap.FieldByName('rsname').AsString;
   Result := qryStatusMap.FieldByName('rid').AsInteger;
 end;
 

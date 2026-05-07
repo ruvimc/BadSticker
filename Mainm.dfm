@@ -1611,10 +1611,6 @@ object MainmForm: TMainmForm
       094A50823AA3049824284109EA154A8049821294A05EA1049824284109EA15FA
       FF0964E5306A85182F0000000049454E44AE426082}
     Flex = 1
-    ExplicitLeft = 45
-    ExplicitTop = 72
-    ExplicitWidth = 275
-    ExplicitHeight = 110
   end
   object qryRashodnik: TMyQuery
     SQL.Strings = (
@@ -1665,7 +1661,9 @@ object MainmForm: TMainmForm
   end
   object qryStatusMap: TMyQuery
     SQL.Strings = (
-      'SELECT rs.roll_statuses_id rid FROM roll_statuses rs'
+      
+        'SELECT rs.roll_statuses_id rid, SUBSTRING_INDEX(rs.roll_statuses' +
+        '_name, '#39' '#39', 1) rsname  FROM roll_statuses rs'
       'WHERE rs.roll_statuses_equipment_event_id = :rsEqId')
     Options.FieldOrigins = foNone
     Left = 40
