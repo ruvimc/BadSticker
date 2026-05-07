@@ -21,6 +21,8 @@ type
 
   TUserMode = (umNone, umAdmin, umPrint, umBlock, umOTP, umLegacy);
 
+  TPersonWorkflowStatus = (pwsNone, pwsStarted, pwsFinished);
+
   TQRData = record
     UserId: string;
     EquipId: string;
@@ -141,6 +143,7 @@ type
     procedure CheckIsLocalAccess;
     procedure SetWorkflowCaption(ACaption: string);
     procedure GetEquipFixList(AEquipId: string);
+    procedure UpdatePersonWorkflow(AStatus: TPersonWorkflowStatus);
   end;
 
   TDatasetHelper = class helper for TMyQuery
@@ -179,6 +182,9 @@ const
 
   INSERT_EQUIP_FIX_LIST_SQL = 'INSERT INTO equipment_fix_list (equip_id, equip_fix_id, datecreate, comment) ' +
     'VALUES (''%s'', %d, NOW(), ''%s'')';
+
+  INSERT_PERSON_WORKFLOW_STATUS = 'INSERT INTO person_workflow (person_id, status, datecreate) ' +
+    'VALUES (''%s'', %d, NOW())';
 
   LAST_ERROR_ROLL_UPDATE_SQL =
     'UPDATE rolls_workflow rw' +
@@ -590,6 +596,11 @@ begin
     [pnlScan.JSName, AText]));
 end;
 
+procedure TMainmForm.UpdatePersonWorkflow(AStatus: TPersonWorkflowStatus);
+begin
+  FConnection.ExecSQL(Format(INSERT_PERSON_WORKFLOW_STATUS, [Concat(QR_CODE_USER_DELIM, FQRUserId), Ord(AStatus)]));
+end;
+
 procedure TMainmForm.UpdateRollSataus(ARollUniqId, ARollPerson,
   AEquipId: string; ARollStatus, ARollOrderId: Integer);
 begin
@@ -705,10 +716,13 @@ begin
     if not FQRUserId.IsEmpty and IsValidUser(FQRUserId) then
     begin
       FUserMode := GetUserMode(FQRUserId);
+      ShowWorkTracker(pnlScan, '#000000', 'Cera Round', 'rgba(40, 40, 40, 0.9)', 5, 0.50);
       FastShowCustomScanner;
     end
     else
+    begin
       FastShowInitScanner;
+    end;
   end
   else if EventName = 'resetChain' then
     ResetChainState;
@@ -922,6 +936,15 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
   end;
 
 begin
+  if EventName = 'workFinished' then
+  begin
+    UpdatePersonWorkflow(pwsFinished);
+  end
+  else
+  if EventName = 'workStarted' then
+  begin
+    UpdatePersonWorkflow(pwsStarted);
+  end;
   if EventName = 'tabChanged' then
   begin
     FServiceTab := Params['index'].AsInteger;
@@ -945,6 +968,7 @@ begin
     Cookie('_username', '-');
     FQRUserId := '';
     FastShowInitScanner;
+    DestroyWorkTracker(pnlScan);
   end
   else
   if EventName = 'resetChain' then
@@ -1098,6 +1122,7 @@ begin
         GetPersonProf;
         FUserMode := LMode;
         Cookie('_username', FQRUserId);
+        ShowWorkTracker(pnlScan, '#000000', 'Cera Round', 'rgba(40, 40, 40, 0.9)', 5, 0.50);
         FastShowCustomScanner;
       end
       else

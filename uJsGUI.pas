@@ -11,18 +11,191 @@ procedure AddArkanoidToPanel(APanel: TUnimPanel);
 
 procedure Toast(const AText: string; AAlign: TAlign = alBottom);
 procedure SetSidePanelState(AOpen: Boolean);
-//procedure ShowServicePanel(APanel: TUnimPanel; const ADataJSON, AComboBoxJSON,
-//  ABgColor, AFontName, AFontColor, ACaption, ACaptionColor: string);
 
 procedure ShowServicePanel(APanel: TUnimPanel; const ADataJSON, AComboBoxJSON,
   ABgColor, AFontName, AFontColor, ACaption, ACaptionColor: string; AActiveTabIndex: Integer = 0);
 
 procedure ShowCustomScanner(APanel: TUnimPanel;
-const ATitle, ABgColor, AFontName, AFontColor, AThemeColor: string;
-AFontSize: Integer; const AMode: string = ''; AScale: Double = 1.0; ARollInfoJson: string = '';
-ACurrentEquipId: string = ''; ACurrentRollId: string = ''; AScanAreaScale: Double = 0.50);
+  const ATitle, ABgColor, AFontName, AFontColor, AThemeColor: string;
+  AFontSize: Integer; const AMode: string = ''; AScale: Double = 1.0; ARollInfoJson: string = '';
+  ACurrentEquipId: string = ''; ACurrentRollId: string = ''; AScanAreaScale: Double = 0.50);
+
+procedure ShowWorkTracker(APanel: TUnimPanel;
+  const ABgColor, AFontName, APanelColor: string;
+  AOffset: Integer; AScale: Double);
+
+procedure DestroyWorkTracker(APanel: TUnimPanel);
 
 implementation
+
+procedure ShowWorkTracker(APanel: TUnimPanel;
+  const ABgColor, AFontName, APanelColor: string;
+  AOffset: Integer; AScale: Double);
+var
+  LJS, LCID: string;
+  LScaleStr: string;
+begin
+  LCID := APanel.JSName + '_wtr';
+  LScaleStr := FloatToStr(AScale).Replace(',', '.');
+
+  LJS := Format(
+    // Удаляем старую версию, если она была
+    'var old=document.getElementById("%0:s_msk"); if(old)old.remove();' +
+
+    // Внедряем стили
+    'var style = document.createElement("style");' +
+    'style.innerHTML = `' +
+    // Маска (оверлей)
+    '  .wtr-mask { position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.8); backdrop-filter:blur(15px); z-index:999990; transition:all 0.5s ease; display:flex; justify-content:center; align-items:center; }' +
+    '  .wtr-mask.hidden { background:rgba(0,0,0,0); backdrop-filter:blur(0px); pointer-events:none; }' +
+
+    // Контейнер (Панель)
+    '  .wtr-container { position:fixed; display:flex; align-items:center; transition:all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); z-index:999999; pointer-events:auto; box-sizing:border-box; }' +
+
+    // Центрированное состояние (Старт)
+    '  .wtr-container.centered { top:50%%; left:50%%; transform: translate(-50%%, -50%%) scale(1); flex-direction:column; gap:20px; background:transparent; border:none; box-shadow:none; }' +
+
+    // Минимизированное состояние (Угол)
+    '  .wtr-container.minimized { ' +
+    '    top:%3:dpx; left:%3:dpx; transform: scale(%4:s); transform-origin: top left; ' +
+    '    flex-direction:row; gap:18px; padding:8px 24px 8px 8px; ' + // Внутренние отступы для кнопки
+    '    background:%2:s; border-radius:100px; ' +
+    '    box-shadow:0 15px 40px rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); ' +
+    '  }' +
+
+    // Кнопка (Сама геометрия)
+    '  .wtr-btn { ' +
+    '    width:160px; height:160px; border-radius:50%%; background:#10b981; color:white; ' +
+    '    border:none; cursor:pointer; font-weight:800; font-family:%1:s; font-size:16px; ' +
+    '    box-shadow:0 15px 30px rgba(16,185,129,0.3); transition:all 0.4s ease; ' +
+    '    display:flex; align-items:center; justify-content:center; text-align:center; ' +
+    '    text-transform:uppercase; letter-spacing:1px; outline:none; -webkit-tap-highlight-color:transparent; ' +
+    '  }' +
+
+    '  .wtr-btn:active { transform: scale(0.95); }' +
+
+    // Кнопка в свернутом виде (СТОП)
+    '  .wtr-container.minimized .wtr-btn { ' +
+    '    width:48px; height:48px; font-size:9px; background:#ef4444; ' +
+    '    box-shadow:0 4px 12px rgba(239,68,68,0.3); flex-shrink:0; ' +
+    '  }' +
+
+    // Таймер
+    '  .wtr-timer { color:white; font-family:%1:s; font-size:48px; font-weight:900; display:none; line-height:1; letter-spacing:-1px; }' +
+    '  .wtr-container.minimized .wtr-timer { display:block; font-size:28px; }' +
+    '`;' +
+    'document.head.appendChild(style);' +
+
+    // HTML структура
+    'document.body.insertAdjacentHTML("beforeend", `' +
+    '  <div id="%0:s_msk" class="wtr-mask">' +
+    '    <div id="%0:s_cont" class="wtr-container centered">' +
+    '      <button id="%0:s_btn" class="wtr-btn">Начать<br>работу</button>' +
+    '      <div id="%0:s_tmr" class="wtr-timer">00:00:00</div>' +
+    '    </div>' +
+    '  </div>' +
+    '`);' +
+
+    'var msk=document.getElementById("%0:s_msk"), btn=document.getElementById("%0:s_btn"), ' +
+    '    cont=document.getElementById("%0:s_cont"), tmr=document.getElementById("%0:s_tmr");' +
+    'var interval = null;' +
+
+    // Форматирование
+    'function fmt(ms){ ' +
+    '  var s=Math.floor(ms/1000), m=Math.floor(s/60), h=Math.floor(m/60);' +
+    '  return [h, m%%60, s%%60].map(v=>v.toString().padStart(2,"0")).join(":");' +
+    '};' +
+
+    // Запуск интервала
+    'function startTmr(startTime){' +
+    '  if(interval) clearInterval(interval);' +
+    '  interval = setInterval(()=>{' +
+    '    var diff = Date.now() - startTime;' +
+    '    if (diff >= 16 * 3600000) { stopWork(); return; }' +
+    '    tmr.innerText = fmt(diff);' +
+    '  }, 1000);' +
+    '};' +
+
+    // Остановка
+    'function stopWork(){' +
+    '  clearInterval(interval);' +
+    '  localStorage.removeItem("wtr_start");' +
+    '  cont.classList.replace("minimized", "centered");' +
+    '  btn.innerHTML="Начать<br>работу"; btn.style.background="#10b981";' +
+    '  msk.classList.remove("hidden"); ' +
+    '  ajaxRequest(%5:s, "workFinished", ["time="+tmr.innerText]);' +
+    '};' +
+
+    // Проверка при запуске (Синхронизация)
+    'var saved = localStorage.getItem("wtr_start");' +
+    'if(saved){' +
+    '  var startTs = parseInt(saved);' +
+    '  var passed = Date.now() - startTs;' +
+    '  if(passed < 16 * 3600000){' +
+    '    cont.classList.replace("centered", "minimized");' +
+    '    btn.innerText="СТОП"; btn.style.background="#ef4444";' +
+    '    msk.classList.add("hidden");' +
+    '    startTmr(startTs);' +
+    '  } else { localStorage.removeItem("wtr_start"); }' +
+    '}' +
+
+    // Клик по кнопке
+    'btn.onclick = function(e){' +
+    '  e.stopPropagation();' +
+    '  if(cont.classList.contains("centered")){' +
+    '    var now = Date.now();' +
+    '    localStorage.setItem("wtr_start", now);' +
+    '    cont.classList.replace("centered", "minimized");' +
+    '    btn.innerText="СТОП"; btn.style.background="#ef4444";' +
+    '    msk.classList.add("hidden");' +
+    '    startTmr(now);' +
+    '    ajaxRequest(%5:s, "workStarted", ["timestamp="+now]);' +
+    '  } else {' +
+    '    stopWork();' +
+    '  }' +
+    '};',
+    [LCID, AFontName, APanelColor, AOffset, LScaleStr, APanel.JSName]
+  );
+
+  UniSession.AddJS(LJS);
+end;
+
+procedure DestroyWorkTracker(APanel: TUnimPanel);
+var
+  LJS, LCID: string;
+begin
+  // Используем тот же префикс ID, что и в основной процедуре
+  LCID := APanel.JSName + '_wtr';
+
+  LJS :=
+    ' (function() { ' +
+    // 1. Очищаем локальное хранилище (удаляем метку времени)
+    '   localStorage.removeItem("wtr_start"); ' +
+
+    // 2. Ищем маску и контейнер
+    '   var msk = document.getElementById("' + LCID + '_msk"); ' +
+    '   var cont = document.getElementById("' + LCID + '_cont"); ' +
+
+    // 3. Останавливаем таймер, если он запущен
+    // Мы не можем напрямую обратиться к переменной interval из другой процедуры,
+    // но при удалении элементов из DOM и очистке ссылок браузер со временем приберет интервал.
+    // Однако, лучше всего принудительно очистить все интервалы, если мы знаем их ID.
+    // В JS нашей основной процедуры мы можем привязать интервал к window для доступа отсюда.
+    '   if (window._wtrInterval) { ' +
+    '     clearInterval(window._wtrInterval); ' +
+    '     window._wtrInterval = null; ' +
+    '   } ' +
+
+    // 4. Удаляем элементы с анимацией затухания (опционально)
+    '   if (msk) { ' +
+    '     msk.style.opacity = "0"; ' +
+    '     setTimeout(function() { msk.remove(); }, 500); ' +
+    '   } ' +
+    ' })(); ';
+
+  UniSession.AddJS(LJS);
+end;
+
 
 procedure Toast(const AText: string; AAlign: TAlign = alBottom);
 var
