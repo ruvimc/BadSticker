@@ -1077,19 +1077,19 @@ $(PreBuildEvent)]]></PreBuildEvent>
     <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
     <Import Project="$(MSBuildProjectName).deployproj" Condition="Exists('$(MSBuildProjectName).deployproj')"/>
     <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='Win32'">
-        <PreBuildEvent>taskkill /f /im BadSticker.exe</PreBuildEvent>
+        <PreBuildEvent>taskkill /f /im BadSticker.exe</PreBuildEvent>
         <PreBuildEventIgnoreExitCode>True</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>True</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>powershell -Command &quot;Start-Process&quot; $(OutputPath)</PostBuildEvent>
+        <PostBuildEvent>powershell -Command &quot;Start-Process&quot; $(OutputPath)</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Win32'">
-        <PreBuildEvent>taskkill /f /im Project1.exe</PreBuildEvent>
+        <PreBuildEvent>taskkill /f /im Project1.exe</PreBuildEvent>
         <PreBuildEventIgnoreExitCode>True</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>powershell -Command &quot;Start-Process&quot; $(OutputPath)</PostBuildEvent>
+        <PostBuildEvent>powershell -Command &quot;Start-Process&quot; $(OutputPath)</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
 </Project>

@@ -57,6 +57,8 @@ type
     qryUpdBlocksWorkflow: TMyQuery;
     qryLastRollBlockInfo: TMyQuery;
     imgBg: TUnimImage;
+    qryEquipFixList: TMyQuery;
+    qryEquipFixStatuses: TMyQuery;
     procedure pnlScanAjaxEvent(Sender: TComponent; EventName: string;
       Params: TUniStrings);
     procedure UnimFormCreate(Sender: TObject);
@@ -73,14 +75,17 @@ type
     FLastRollAction, FCurrentBlockId: Integer;
     FLastRollIsFinished, FBlockIsAssignedBegin, FBlockIsAssignedEnd,
       FBlocksWorkflowIsStarted: Boolean;
-    FCurrentEquipAction, FCurrentEquipActionPrefix: string;
-    FRollInfoJson, FRollStatusJson, FBlockInfoJson: string;
+    FCurrentEquipAction, FCurrentEquipActionPrefix, FFixComment: string;
+    FRollInfoJson, FRollStatusJson, FBlockInfoJson, FEquipFixListJson,
+     FEquipFixStatusesJson: string;
     FIsAfterLogin: Boolean;
-    FRashodnikId: Integer;
+    FRashodnikId, FFixId, FServiceTab: Integer;
     FInfoMode, FBlockMode, FBlockAssignMode, FBlockWorkflowMode: Boolean;
     procedure FastExecSql(ASQL: string);
     procedure FastShowCustomScanner;
     procedure FastShowInitScanner;
+    procedure FastShowEquipServicePanel;
+    procedure FastShowEquipFixPanel;
     procedure HandleScanSuccess(const ACode, AMode, ASubMode: string);
     procedure DoServiceAction(const AEquipId: string);
     procedure SetMadStatus(const AStatusType: string; AEnabled: Boolean);
@@ -98,6 +103,7 @@ type
     //procedure ReSetBlockAssignMode;
     procedure RollCompleteEffect;
     procedure UpdateEquipService(AParams: TUniStrings);
+    procedure UpdateEquipFix(AParams: TUniStrings);
     procedure ToggleCamera(AOnOff: Boolean);
     //procedure ShowInfoPanel(ATableDataJson: string);
     procedure SetNodeStatus(AStatus: string; ANodeName: string);
@@ -132,6 +138,7 @@ type
     //function IsLastBlockAssigned: Boolean;
     procedure CheckIsLocalAccess;
     procedure SetWorkflowCaption(ACaption: string);
+    procedure GetEquipFixList(AEquipId: string);
   end;
 
   TDatasetHelper = class helper for TMyQuery
@@ -168,6 +175,9 @@ const
     'INSERT INTO EquipmentServiceList (equipmentId, rashodnikId, serviceDate) ' +
     'VALUES (''%s'', %d, %s)';
 
+  INSERT_EQUIP_FIX_LIST_SQL = 'INSERT INTO equipment_fix_list (equip_id, equip_fix_id, datecreate, comment) ' +
+    'VALUES (''%s'', %d, NOW(), ''%s'')';
+
   LAST_ERROR_ROLL_UPDATE_SQL =
     'UPDATE rolls_workflow rw' +
     'LEFT JOIN roll_statuses rs ON rs.roll_statuses_id = rw.roll_status' +
@@ -196,7 +206,6 @@ const
   SVG_ROLL = '<svg viewBox="0 0 24 24" width="51" height="51" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6"></path></svg>';
 
   DATAMATRIX_PROF_ID = 9;
-
 
 procedure AddGyroRotation(APanel: TUnimPanel; AMaxDeg: Integer = 5);
 var
@@ -566,6 +575,12 @@ begin
   FastExecSQL(Format(INSERT_EQUIP_SERVICE_LIST_SQL, [FCurrentEquipId, FRashodnikId, QuotedStr(FormatDateTime('yyyy-mm-dd hh:nn:ss', Now))]));
 end;
 
+procedure TMainmForm.UpdateEquipFix(AParams: TUniStrings);
+begin
+  FFixId := AParams['id'].AsInteger;
+  FastExecSQL(Format(INSERT_EQUIP_FIX_LIST_SQL, [FCurrentEquipId, FFixId, FFixComment]));
+end;
+
 procedure TMainmForm.UpdateInfoBadge(const AText: string);
 begin
   UniSession.AddJS
@@ -656,6 +671,8 @@ begin
     qryBlocksWorkflowInfo.Connection := FConnection;
     qryUpdBlocksWorkflow.Connection := FConnection;
     qryLastRollBlockInfo.Connection := FConnection;
+    qryEquipFixList.Connection := FConnection;
+    qryEquipFixStatuses.Connection := FConnection;
     RegisterFormReady;
   finally
     FSettings.Free;
@@ -725,6 +742,17 @@ end;
 procedure TMainmForm.RollStatusOff;
 begin
   SetNodeStatus('false', 'roll');
+end;
+
+procedure TMainmForm.GetEquipFixList(AEquipId: string);
+begin
+  qryEquipFixList.Close;
+  qryEquipFixList.ParamByName('eqId').AsString := AEquipId;
+  qryEquipFixList.Open;
+  qryEquipFixStatuses.Close;
+  qryEquipFixStatuses.Open;
+  FEquipFixListJson := qryEquipFixList.ToJSON(['equipment_name', 'name', 'datecreate']);
+  FEquipFixStatusesJson := qryEquipFixStatuses.ToJSON(['id', 'name']);
 end;
 
 function TMainmForm.GetEquipName(AEqipId: string): string;
@@ -832,6 +860,20 @@ begin
     DestroyArkanoid(pnlScan);
 end;
 
+procedure TMainmForm.FastShowEquipServicePanel;
+begin
+  ShowServicePanel(pnlScan, qryEquipServiceList.ToJSON(['equipment_name',
+    'name', 'serviceDate']), qryRashodnik.ToJSON(['id', 'name']), '#989FC0',
+    'Cera Round', 'white', FCurrentEquipName, '#343F50');
+end;
+
+procedure TMainmForm.FastShowEquipFixPanel;
+begin
+  GetEquipFixList(FCurrentEquipId);
+  ShowServicePanel(pnlScan, FEquipFixListJson, FEquipFixStatusesJson, '#989FC0',
+    'Cera Round', 'white', FCurrentEquipName, '#343F50', 1);
+end;
+
 procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Params: TUniStrings);
 
   procedure RollComplete;
@@ -876,6 +918,15 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
   end;
 
 begin
+  if EventName = 'tabChanged' then
+  begin
+    FServiceTab := Params['index'].AsInteger;
+    if FServiceTab = 0 then
+      FastShowEquipServicePanel
+    else
+      FastShowEquipFixPanel
+  end
+  else
   if EventName = '_camLongPress' then
     // сброс после долгого нажатия
     AfterStart
@@ -897,8 +948,16 @@ begin
   else
   if EventName = 'itemAdded' then
   begin
-    UpdateEquipService(Params);
-    ToggleCamera(True);
+    if FServiceTab = 0 then
+    begin
+      UpdateEquipService(Params);
+      ToggleCamera(False);
+    end
+    else
+    begin
+      UpdateEquipFix(Params);
+      ToggleCamera(True);
+    end;
   end
   else
   if EventName = 'reqTab' then
@@ -1301,9 +1360,11 @@ begin
   qryEquipServiceList.ParamByName('pEqId').AsString := AEquipId;
   qryEquipServiceList.Open;
   FCurrentEquipName := qryEquipServiceList.FieldByName('equipment_name').AsString;
+  FCurrentEquipId := AEquipId;
   qryRashodnik.Close;
   qryRashodnik.ParamByName('pEqId').AsString := AEquipId;
   qryRashodnik.Open;
+  GetEquipFixList(AEquipId);
   ShowServicePanel(pnlScan, qryEquipServiceList.ToJSON(['equipment_name',
     'name', 'serviceDate']), qryRashodnik.ToJSON(['id', 'name']), '#989FC0',
     'Cera Round', 'white', FCurrentEquipName, '#343F50');

@@ -1611,6 +1611,7 @@ object MainmForm: TMainmForm
       094A50823AA3049824284109EA154A8049821294A05EA1049824284109EA15FA
       FF0964E5306A85182F0000000049454E44AE426082}
     Flex = 1
+    OnAjaxEvent = pnlScanAjaxEvent
   end
   object qryRashodnik: TMyQuery
     SQL.Strings = (
@@ -2054,5 +2055,33 @@ object MainmForm: TMainmForm
         Name = 'ruid'
         Value = nil
       end>
+  end
+  object qryEquipFixList: TMyQuery
+    SQL.Strings = (
+      
+        'SELECT e.equipment_name, efs.name, efl.datecreate FROM equipment' +
+        '_fix_list efl'
+      'LEFT JOIN equipment e ON e.equipment_id = efl.equip_id'
+      
+        'LEFT JOIN equipment_fix_statuses efs ON efl.equip_fix_id = efs.i' +
+        'd'
+      'WHERE e.equipment_id = :eqId'
+      'ORDER BY datecreate DESC')
+    Options.FieldOrigins = foNone
+    Left = 40
+    Top = 464
+    ParamData = <
+      item
+        DataType = ftUnknown
+        Name = 'eqId'
+        Value = nil
+      end>
+  end
+  object qryEquipFixStatuses: TMyQuery
+    SQL.Strings = (
+      'SELECT * FROM equipment_fix_statuses efs')
+    Options.FieldOrigins = foNone
+    Left = 128
+    Top = 464
   end
 end
