@@ -67,10 +67,16 @@ begin
     '  .wtr-btn { ' +
     '    width:160px; height:160px; border-radius:50%%; background:#10b981; color:white; ' +
     '    border:none; cursor:pointer; font-weight:800; font-family:%1:s; font-size:16px; ' +
-    '    box-shadow:0 15px 30px rgba(16,185,129,0.3); transition:all 0.4s ease; ' +
+    '    box-shadow:0 15px 30px rgba(16,185,129,0.3); ' +
     '    display:flex; align-items:center; justify-content:center; text-align:center; ' +
     '    text-transform:uppercase; letter-spacing:1px; outline:none; -webkit-tap-highlight-color:transparent; ' +
-    '  }' +
+    '    /* Включаем GPU: */' +
+    '    transform: translateZ(0); ' +
+    '    will-change: transform, opacity; ' +
+    '    backface-visibility: hidden; ' +
+    '    /* Оптимизируем анимацию: */' +
+    '    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease; ' +
+    '  }'  +
 
     '  .wtr-btn:active { transform: scale(0.95); }' +
 
@@ -754,7 +760,7 @@ begin
       '  @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }' +
       '</style>' +
       '<div id="' + LCID + '_exit" onclick="ajaxRequest(window[''' + LCID + '''], ''exitScanner'', []);" ' +
-      'style="position:absolute; top:10px; left:93%; transform:translateX(-50%); width:35px; height:35px; ' +
+      'style="position:absolute; top:5px; left:95.5%; transform:translateX(-50%); width:27px; height:27px; ' +
       'background:#ef4444; border-radius:50%; display:flex; align-items:center; justify-content:center; ' +
       'color:white; box-shadow:0 0 15px rgba(0,0,0,0.7); z-index:999; overflow:hidden;">' +
         // Этот div внутри создаст крутящуюся линию
