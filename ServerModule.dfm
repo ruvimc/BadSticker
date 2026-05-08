@@ -2,7 +2,7 @@ object UniServerModule: TUniServerModule
   OldCreateOrder = False
   TempFolder = 'temp\'
   Port = 8078
-  Title = 'StinkerKong'
+  Title = 'BadSticker'
   Favicon.Data = {
     0000010002002020000001002000A81000002600000010100000010020006804
     0000CE1000002800000020000000400000000100200000000000801000000000
