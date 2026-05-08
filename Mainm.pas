@@ -10,14 +10,18 @@ uses
   uniGUImJSForm,
   uniGUIBaseClasses, uniPanel, uniHTMLFrame, uniBasicGrid, uniDBGrid,
   unimDBListGrid, unimDBGrid, unimPanel, unimHTMLFrame, uSettings, Web.HTTPApp,
-  Data.DB, MemDS, Vcl.Imaging.pngimage, uniImage, unimImage;
+  Data.DB, MemDS, Vcl.Imaging.pngimage, uniImage, unimImage, uniTimer, unimTimer;
 
 type
   TQREquipAction = (qraNone, qraService, qraStart, qraStop, qraBlock);
 
   TEquipAction = (eqaStart, eqaStop);
 
+  TEquipFixStatus = (efsNone, efsFixBegin, efsFixEnd);
+
   TUserMode = (umNone, umAdmin, umPrint, umBlock, umOTP, umLegacy);
+
+  TPersonWorkflowStatus = (pwsNone, pwsStarted, pwsFinished);
 
   TQRData = record
     UserId: string;
@@ -57,11 +61,16 @@ type
     qryUpdBlocksWorkflow: TMyQuery;
     qryLastRollBlockInfo: TMyQuery;
     imgBg: TUnimImage;
+    qryEquipFixList: TMyQuery;
+    qryEquipFixStatuses: TMyQuery;
+    tmrResetCounter: TUnimTimer;
     procedure pnlScanAjaxEvent(Sender: TComponent; EventName: string;
       Params: TUniStrings);
     procedure UnimFormCreate(Sender: TObject);
     procedure UnimFormAjaxEvent(Sender: TComponent; EventName: string;
       Params: TUniStrings);
+    procedure imgBgClick(Sender: TObject);
+    procedure tmrResetCounterTimer(Sender: TObject);
   private
     FSettings: TSettings;
     FConnection: TMyConnection;
@@ -73,14 +82,17 @@ type
     FLastRollAction, FCurrentBlockId: Integer;
     FLastRollIsFinished, FBlockIsAssignedBegin, FBlockIsAssignedEnd,
       FBlocksWorkflowIsStarted: Boolean;
-    FCurrentEquipAction: string;
-    FRollInfoJson, FRollStatusJson, FBlockInfoJson: string;
+    FCurrentEquipAction, FCurrentEquipActionPrefix, FFixComment: string;
+    FRollInfoJson, FRollStatusJson, FBlockInfoJson, FEquipFixListJson,
+     FEquipFixStatusesJson: string;
     FIsAfterLogin: Boolean;
-    FRashodnikId: Integer;
+    FRashodnikId, FFixId, FServiceTab: Integer;
     FInfoMode, FBlockMode, FBlockAssignMode, FBlockWorkflowMode: Boolean;
     procedure FastExecSql(ASQL: string);
     procedure FastShowCustomScanner;
     procedure FastShowInitScanner;
+    procedure FastShowEquipServicePanel;
+    procedure FastShowEquipFixPanel;
     procedure HandleScanSuccess(const ACode, AMode, ASubMode: string);
     procedure DoServiceAction(const AEquipId: string);
     procedure SetMadStatus(const AStatusType: string; AEnabled: Boolean);
@@ -98,6 +110,7 @@ type
     //procedure ReSetBlockAssignMode;
     procedure RollCompleteEffect;
     procedure UpdateEquipService(AParams: TUniStrings);
+    procedure UpdateEquipFix(AParams: TUniStrings);
     procedure ToggleCamera(AOnOff: Boolean);
     //procedure ShowInfoPanel(ATableDataJson: string);
     procedure SetNodeStatus(AStatus: string; ANodeName: string);
@@ -131,6 +144,9 @@ type
     //function IsDataMatrixEnabled: Boolean;
     //function IsLastBlockAssigned: Boolean;
     procedure CheckIsLocalAccess;
+    procedure SetWorkflowCaption(ACaption: string);
+    procedure GetEquipFixList(AEquipId: string);
+    procedure UpdatePersonWorkflow(AStatus: TPersonWorkflowStatus);
   end;
 
   TDatasetHelper = class helper for TMyQuery
@@ -167,6 +183,12 @@ const
     'INSERT INTO EquipmentServiceList (equipmentId, rashodnikId, serviceDate) ' +
     'VALUES (''%s'', %d, %s)';
 
+  INSERT_EQUIP_FIX_LIST_SQL = 'INSERT INTO equipment_fix_list (equip_id, equip_fix_id, datecreate, comment) ' +
+    'VALUES (''%s'', %d, NOW(), ''%s'')';
+
+  INSERT_PERSON_WORKFLOW_STATUS = 'INSERT INTO person_workflow (person_id, status, datecreate) ' +
+    'VALUES (''%s'', %d, NOW())';
+
   LAST_ERROR_ROLL_UPDATE_SQL =
     'UPDATE rolls_workflow rw' +
     'LEFT JOIN roll_statuses rs ON rs.roll_statuses_id = rw.roll_status' +
@@ -196,6 +218,11 @@ const
 
   DATAMATRIX_PROF_ID = 9;
 
+  ADMIN_CLICK_COUNT = 16;
+
+var
+  GAdminClickCounter: Byte;
+  IsOutWork: Boolean;
 
 procedure AddGyroRotation(APanel: TUnimPanel; AMaxDeg: Integer = 5);
 var
@@ -441,6 +468,11 @@ begin
   SetHTMLNodeText('roll', AText);
 end;
 
+procedure TMainmForm.SetWorkflowCaption(ACaption: string);
+begin
+  SetElementText('block_end_title', ACaption);
+end;
+
 procedure TMainmForm.SetHTMLNodeText(ANodeName, AText: string);
 begin
   UniSession.AddJS(pnlScan.JSName + '.setNodeText("'+ANodeName+'", "'+AText+'");');
@@ -519,7 +551,7 @@ end;
 
 procedure TMainmForm.ReSetInfoMode;
 begin
-  SetElementText('block_end_title', 'Статус рулона');
+  SetElementText('block_end_title', 'Работа с рулоном');
   SetElementText('btn_action_start', 'Начать');
   FInfoMode := False;
 end;
@@ -560,11 +592,22 @@ begin
   FastExecSQL(Format(INSERT_EQUIP_SERVICE_LIST_SQL, [FCurrentEquipId, FRashodnikId, QuotedStr(FormatDateTime('yyyy-mm-dd hh:nn:ss', Now))]));
 end;
 
+procedure TMainmForm.UpdateEquipFix(AParams: TUniStrings);
+begin
+  FFixId := AParams['id'].AsInteger;
+  FastExecSQL(Format(INSERT_EQUIP_FIX_LIST_SQL, [FCurrentEquipId, FFixId, FFixComment]));
+end;
+
 procedure TMainmForm.UpdateInfoBadge(const AText: string);
 begin
   UniSession.AddJS
     (Format('var e=document.getElementById("%s_info_badge");if(e)e.innerText="%s";',
     [pnlScan.JSName, AText]));
+end;
+
+procedure TMainmForm.UpdatePersonWorkflow(AStatus: TPersonWorkflowStatus);
+begin
+  FConnection.ExecSQL(Format(INSERT_PERSON_WORKFLOW_STATUS, [Concat(QR_CODE_USER_DELIM, FQRUserId), Ord(AStatus)]));
 end;
 
 procedure TMainmForm.UpdateRollSataus(ARollUniqId, ARollPerson,
@@ -595,16 +638,27 @@ begin
   SetSidePanelState(False)
 end;
 
-{
-procedure TMainmForm.ShowInfoPanel(ATableDataJson: string);
+procedure TMainmForm.imgBgClick(Sender: TObject);
 begin
-  UniSession.AddJS(pnlScan.JSName + '.renderTable(''' + ATableDataJson + ''');');
+  Inc(GAdminClickCounter);
+  if GAdminClickCounter = 10 then
+    Toast('Еще чуть-чуть и ты это сделаешь...', alBottom);
+  if GAdminClickCounter = ADMIN_CLICK_COUNT then
+  begin
+    Toast('А ты упрямый...', alBottom);
+    pnlScan.Visible := True;
+    imgBg.Visible := False;
+  end;
 end;
-}
 
 procedure TMainmForm.ShowProcessPanel(AShow: Boolean);
 begin
   UniSession.AddJS(pnlScan.JSName + '.showProcessPanel('+ IfThen(AShow, 'true', 'false') +');');
+end;
+
+procedure TMainmForm.tmrResetCounterTimer(Sender: TObject);
+begin
+  GAdminClickCounter := 0;
 end;
 
 procedure TMainmForm.ToggleCamera(AOnOff: Boolean);
@@ -650,6 +704,8 @@ begin
     qryBlocksWorkflowInfo.Connection := FConnection;
     qryUpdBlocksWorkflow.Connection := FConnection;
     qryLastRollBlockInfo.Connection := FConnection;
+    qryEquipFixList.Connection := FConnection;
+    qryEquipFixStatuses.Connection := FConnection;
     RegisterFormReady;
   finally
     FSettings.Free;
@@ -667,7 +723,9 @@ begin
     begin
       Toast('Доступ вне работы <br> <br> ЗАПРЕЩЕН <br> <br> Не балуйся 🤡', alClient);
       MainmForm.Color := clBlack;
-      pnlScan.Visible := False
+      pnlScan.Visible := False;
+      DestroyWorkTracker(pnlScan);
+      IsOutWork := True;
     end
     else
       FadeOutAndDestroy(imgBg, 2000);
@@ -680,10 +738,14 @@ begin
     if not FQRUserId.IsEmpty and IsValidUser(FQRUserId) then
     begin
       FUserMode := GetUserMode(FQRUserId);
+      if not IsOutWork then
+        ShowWorkTracker(pnlScan, '#000000', 'Cera Round', 'rgba(40, 40, 40, 0.9)', 5, 0.50);
       FastShowCustomScanner;
     end
     else
+    begin
       FastShowInitScanner;
+    end;
   end
   else if EventName = 'resetChain' then
     ResetChainState;
@@ -719,6 +781,19 @@ end;
 procedure TMainmForm.RollStatusOff;
 begin
   SetNodeStatus('false', 'roll');
+end;
+
+procedure TMainmForm.GetEquipFixList(AEquipId: string);
+begin
+  qryEquipFixList.Close;
+  qryEquipFixList.ParamByName('eqId').AsString := AEquipId;
+  qryEquipFixList.Open;
+  qryEquipFixStatuses.Close;
+  qryEquipFixStatuses.Open;
+  FEquipFixListJson := qryEquipFixList.ToJSON(['equipment_name', 'name', 'datecreate']);
+  qryEquipFixList.First;
+  FFixId := qryEquipFixList.FieldByName('equip_fix_id').AsInteger;
+  FEquipFixStatusesJson := qryEquipFixStatuses.ToJSON(['id', 'name']);
 end;
 
 function TMainmForm.GetEquipName(AEqipId: string): string;
@@ -826,6 +901,20 @@ begin
     DestroyArkanoid(pnlScan);
 end;
 
+procedure TMainmForm.FastShowEquipServicePanel;
+begin
+  ShowServicePanel(pnlScan, qryEquipServiceList.ToJSON(['equipment_name',
+    'name', 'serviceDate']), qryRashodnik.ToJSON(['id', 'name']), '#989FC0',
+    'Cera Round', 'white', FCurrentEquipName, '#343F50');
+end;
+
+procedure TMainmForm.FastShowEquipFixPanel;
+begin
+  GetEquipFixList(FCurrentEquipId);
+  ShowServicePanel(pnlScan, FEquipFixListJson, FEquipFixStatusesJson, '#989FC0',
+    'Cera Round', 'white', FCurrentEquipName, '#343F50', 1);
+end;
+
 procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Params: TUniStrings);
 
   procedure RollComplete;
@@ -849,6 +938,7 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
     ToggleCamera(False);
     FRollMode := False;
     FEquipMode := False;
+    FBlockMode := False;
   end;
 
   procedure AterInfo;
@@ -869,8 +959,27 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
   end;
 
 begin
+  if EventName = 'workFinished' then
+  begin
+    UpdatePersonWorkflow(pwsFinished);
+  end
+  else
+  if EventName = 'workStarted' then
+  begin
+    UpdatePersonWorkflow(pwsStarted);
+  end;
+  if EventName = 'tabChanged' then
+  begin
+    FServiceTab := Params['index'].AsInteger;
+    if FServiceTab = 0 then
+      FastShowEquipServicePanel
+    else
+      FastShowEquipFixPanel
+  end
+  else
   if EventName = '_camLongPress' then
-    ToggleCamera(False)
+    // сброс после долгого нажатия
+    AfterStart
   else
   if EventName = 'scanSuccess' then
   begin
@@ -882,6 +991,7 @@ begin
     Cookie('_username', '-');
     FQRUserId := '';
     FastShowInitScanner;
+    DestroyWorkTracker(pnlScan);
   end
   else
   if EventName = 'resetChain' then
@@ -889,8 +999,16 @@ begin
   else
   if EventName = 'itemAdded' then
   begin
-    UpdateEquipService(Params);
-    ToggleCamera(True);
+    if FServiceTab = 0 then
+    begin
+      UpdateEquipService(Params);
+      ToggleCamera(False);
+    end
+    else
+    begin
+      UpdateEquipFix(Params);
+      ToggleCamera(True);
+    end;
   end
   else
   if EventName = 'reqTab' then
@@ -1027,6 +1145,7 @@ begin
         GetPersonProf;
         FUserMode := LMode;
         Cookie('_username', FQRUserId);
+        ShowWorkTracker(pnlScan, '#000000', 'Cera Round', 'rgba(40, 40, 40, 0.9)', 5, 0.50);
         FastShowCustomScanner;
       end
       else
@@ -1111,7 +1230,17 @@ begin
       FEquipMode := True;
       SetElementSvg('node_eq', SVG_EQUIP);
       FCurrentEquipAction := LQR.ActionCode;
+      EquipEventToRollStatus(FCurrentEquipAction.ToInteger - 1);
       FCurrentEquipId := LQR.EquipId;
+      GetEquipFixList(FCurrentEquipId);
+      if FFixId = Ord(efsFixBegin) then
+      begin
+        Toast('Оборудование в ремонте');
+        FBlockMode := False;
+        ToggleCamera(False);
+        FFixId := 0;
+        Exit;
+      end;
       FCurrentEquipName := GetEquipName(FCurrentEquipId);
       SetEquipCaption(FCurrentEquipName);
       RollActionButtons(True, False);
@@ -1134,7 +1263,7 @@ begin
       EquipStatusOn;
       SetEquipCaption(FCurrentEquipName);
       ReSetInfoMode;
-
+      SetWorkflowCaption(FCurrentEquipActionPrefix);
       FRollMode := False;
       FBlockMode := False;
       Exit;
@@ -1292,9 +1421,11 @@ begin
   qryEquipServiceList.ParamByName('pEqId').AsString := AEquipId;
   qryEquipServiceList.Open;
   FCurrentEquipName := qryEquipServiceList.FieldByName('equipment_name').AsString;
+  FCurrentEquipId := AEquipId;
   qryRashodnik.Close;
   qryRashodnik.ParamByName('pEqId').AsString := AEquipId;
   qryRashodnik.Open;
+  GetEquipFixList(AEquipId);
   ShowServicePanel(pnlScan, qryEquipServiceList.ToJSON(['equipment_name',
     'name', 'serviceDate']), qryRashodnik.ToJSON(['id', 'name']), '#989FC0',
     'Cera Round', 'white', FCurrentEquipName, '#343F50');
@@ -1306,6 +1437,7 @@ begin
   qryStatusMap.Close;
   qryStatusMap.ParamByName('rsEqId').AsInteger := AEventActionId;
   qryStatusMap.Open;
+  FCurrentEquipActionPrefix := qryStatusMap.FieldByName('rsname').AsString;
   Result := qryStatusMap.FieldByName('rid').AsInteger;
 end;
 

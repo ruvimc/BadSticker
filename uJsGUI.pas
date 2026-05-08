@@ -11,14 +11,197 @@ procedure AddArkanoidToPanel(APanel: TUnimPanel);
 
 procedure Toast(const AText: string; AAlign: TAlign = alBottom);
 procedure SetSidePanelState(AOpen: Boolean);
+
 procedure ShowServicePanel(APanel: TUnimPanel; const ADataJSON, AComboBoxJSON,
-  ABgColor, AFontName, AFontColor, ACaption, ACaptionColor: string);
+  ABgColor, AFontName, AFontColor, ACaption, ACaptionColor: string; AActiveTabIndex: Integer = 0);
+
 procedure ShowCustomScanner(APanel: TUnimPanel;
-const ATitle, ABgColor, AFontName, AFontColor, AThemeColor: string;
-AFontSize: Integer; const AMode: string = ''; AScale: Double = 1.0; ARollInfoJson: string = '';
-ACurrentEquipId: string = ''; ACurrentRollId: string = ''; AScanAreaScale: Double = 0.50);
+  const ATitle, ABgColor, AFontName, AFontColor, AThemeColor: string;
+  AFontSize: Integer; const AMode: string = ''; AScale: Double = 1.0; ARollInfoJson: string = '';
+  ACurrentEquipId: string = ''; ACurrentRollId: string = ''; AScanAreaScale: Double = 0.50);
+
+procedure ShowWorkTracker(APanel: TUnimPanel;
+  const ABgColor, AFontName, APanelColor: string;
+  AOffset: Integer; AScale: Double);
+
+procedure DestroyWorkTracker(APanel: TUnimPanel);
 
 implementation
+
+procedure ShowWorkTracker(APanel: TUnimPanel;
+  const ABgColor, AFontName, APanelColor: string;
+  AOffset: Integer; AScale: Double);
+var
+  LJS, LCID: string;
+  LScaleStr: string;
+begin
+  LCID := APanel.JSName + '_wtr';
+  LScaleStr := FloatToStr(AScale).Replace(',', '.');
+
+  LJS := Format(
+    // Удаляем старую версию, если она была
+    'var old=document.getElementById("%0:s_msk"); if(old)old.remove();' +
+
+    // Внедряем стили
+    'var style = document.createElement("style");' +
+    'style.innerHTML = `' +
+    // Маска (оверлей)
+    '  .wtr-mask { position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.8); backdrop-filter:blur(15px); z-index:999990; transition:all 0.5s ease; display:flex; justify-content:center; align-items:center; }' +
+    '  .wtr-mask.hidden { background:rgba(0,0,0,0); backdrop-filter:blur(0px); pointer-events:none; }' +
+
+    // Контейнер (Панель)
+    '  .wtr-container { position:fixed; display:flex; align-items:center; transition:all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); z-index:999999; pointer-events:auto; box-sizing:border-box; }' +
+
+    // Центрированное состояние (Старт)
+    '  .wtr-container.centered { top:50%%; left:50%%; transform: translate(-50%%, -50%%) scale(1); flex-direction:column; gap:20px; background:transparent; border:none; box-shadow:none; }' +
+
+    // Минимизированное состояние (Угол)
+    '  .wtr-container.minimized { ' +
+    '    top:%3:dpx; left:%3:dpx; transform: scale(%4:s); transform-origin: top left; ' +
+    '    flex-direction:row; gap:18px; padding:8px 24px 8px 8px; ' + // Внутренние отступы для кнопки
+    '    background:%2:s; border-radius:100px; ' +
+    '    box-shadow:0 15px 40px rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); ' +
+    '  }' +
+
+    // Кнопка (Сама геометрия)
+    '  .wtr-btn { ' +
+    '    width:160px; height:160px; border-radius:50%%; background:#10b981; color:white; ' +
+    '    border:none; cursor:pointer; font-weight:800; font-family:%1:s; font-size:16px; ' +
+    '    box-shadow:0 15px 30px rgba(16,185,129,0.3); ' +
+    '    display:flex; align-items:center; justify-content:center; text-align:center; ' +
+    '    text-transform:uppercase; letter-spacing:1px; outline:none; -webkit-tap-highlight-color:transparent; ' +
+    '    /* Включаем GPU: */' +
+    '    transform: translateZ(0); ' +
+    '    will-change: transform, opacity; ' +
+    '    backface-visibility: hidden; ' +
+    '    /* Оптимизируем анимацию: */' +
+    '    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease; ' +
+    '  }'  +
+
+    '  .wtr-btn:active { transform: scale(0.95); }' +
+
+    // Кнопка в свернутом виде (СТОП)
+    '  .wtr-container.minimized .wtr-btn { ' +
+    '    width:48px; height:48px; font-size:9px; background:#ef4444; ' +
+    '    box-shadow:0 4px 12px rgba(239,68,68,0.3); flex-shrink:0; ' +
+    '  }' +
+
+    // Таймер
+    '  .wtr-timer { color:white; font-family:%1:s; font-size:48px; font-weight:900; display:none; line-height:1; letter-spacing:-1px; }' +
+    '  .wtr-container.minimized .wtr-timer { display:block; font-size:28px; }' +
+    '`;' +
+    'document.head.appendChild(style);' +
+
+    // HTML структура
+    'document.body.insertAdjacentHTML("beforeend", `' +
+    '  <div id="%0:s_msk" class="wtr-mask">' +
+    '    <div id="%0:s_cont" class="wtr-container centered">' +
+    '      <button id="%0:s_btn" class="wtr-btn">Начать<br>работу</button>' +
+    '      <div id="%0:s_tmr" class="wtr-timer">00:00:00</div>' +
+    '    </div>' +
+    '  </div>' +
+    '`);' +
+
+    'var msk=document.getElementById("%0:s_msk"), btn=document.getElementById("%0:s_btn"), ' +
+    '    cont=document.getElementById("%0:s_cont"), tmr=document.getElementById("%0:s_tmr");' +
+    'var interval = null;' +
+
+    // Форматирование
+    'function fmt(ms){ ' +
+    '  var s=Math.floor(ms/1000), m=Math.floor(s/60), h=Math.floor(m/60);' +
+    '  return [h, m%%60, s%%60].map(v=>v.toString().padStart(2,"0")).join(":");' +
+    '};' +
+
+    // Запуск интервала
+    'function startTmr(startTime){' +
+    '  if(interval) clearInterval(interval);' +
+    '  interval = setInterval(()=>{' +
+    '    var diff = Date.now() - startTime;' +
+    '    if (diff >= 16 * 3600000) { stopWork(); return; }' +
+    '    tmr.innerText = fmt(diff);' +
+    '  }, 1000);' +
+    '};' +
+
+    // Остановка
+    'function stopWork(){' +
+    '  clearInterval(interval);' +
+    '  localStorage.removeItem("wtr_start");' +
+    '  cont.classList.replace("minimized", "centered");' +
+    '  btn.innerHTML="Начать<br>работу"; btn.style.background="#10b981";' +
+    '  msk.classList.remove("hidden"); ' +
+    '  ajaxRequest(%5:s, "workFinished", ["time="+tmr.innerText]);' +
+    '};' +
+
+    // Проверка при запуске (Синхронизация)
+    'var saved = localStorage.getItem("wtr_start");' +
+    'if(saved){' +
+    '  var startTs = parseInt(saved);' +
+    '  var passed = Date.now() - startTs;' +
+    '  if(passed < 16 * 3600000){' +
+    '    cont.classList.replace("centered", "minimized");' +
+    '    btn.innerText="СТОП"; btn.style.background="#ef4444";' +
+    '    msk.classList.add("hidden");' +
+    '    startTmr(startTs);' +
+    '  } else { localStorage.removeItem("wtr_start"); }' +
+    '}' +
+
+    // Клик по кнопке
+    'btn.onclick = function(e){' +
+    '  e.stopPropagation();' +
+    '  if(cont.classList.contains("centered")){' +
+    '    var now = Date.now();' +
+    '    localStorage.setItem("wtr_start", now);' +
+    '    cont.classList.replace("centered", "minimized");' +
+    '    btn.innerText="СТОП"; btn.style.background="#ef4444";' +
+    '    msk.classList.add("hidden");' +
+    '    startTmr(now);' +
+    '    ajaxRequest(%5:s, "workStarted", ["timestamp="+now]);' +
+    '  } else {' +
+    '    stopWork();' +
+    '  }' +
+    '};',
+    [LCID, AFontName, APanelColor, AOffset, LScaleStr, APanel.JSName]
+  );
+
+  UniSession.AddJS(LJS);
+end;
+
+procedure DestroyWorkTracker(APanel: TUnimPanel);
+var
+  LJS, LCID: string;
+begin
+  // Используем тот же префикс ID, что и в основной процедуре
+  LCID := APanel.JSName + '_wtr';
+
+  LJS :=
+    ' (function() { ' +
+    // 1. Очищаем локальное хранилище (удаляем метку времени)
+    '   localStorage.removeItem("wtr_start"); ' +
+
+    // 2. Ищем маску и контейнер
+    '   var msk = document.getElementById("' + LCID + '_msk"); ' +
+    '   var cont = document.getElementById("' + LCID + '_cont"); ' +
+
+    // 3. Останавливаем таймер, если он запущен
+    // Мы не можем напрямую обратиться к переменной interval из другой процедуры,
+    // но при удалении элементов из DOM и очистке ссылок браузер со временем приберет интервал.
+    // Однако, лучше всего принудительно очистить все интервалы, если мы знаем их ID.
+    // В JS нашей основной процедуры мы можем привязать интервал к window для доступа отсюда.
+    '   if (window._wtrInterval) { ' +
+    '     clearInterval(window._wtrInterval); ' +
+    '     window._wtrInterval = null; ' +
+    '   } ' +
+
+    // 4. Удаляем элементы с анимацией затухания (опционально)
+    '   if (msk) { ' +
+    '     msk.style.opacity = "0"; ' +
+    '     setTimeout(function() { msk.remove(); }, 500); ' +
+    '   } ' +
+    ' })(); ';
+
+  UniSession.AddJS(LJS);
+end;
+
 
 procedure Toast(const AText: string; AAlign: TAlign = alBottom);
 var
@@ -201,10 +384,11 @@ begin
 end;
 
 procedure ShowServicePanel(APanel: TUnimPanel; const ADataJSON, AComboBoxJSON,
-  ABgColor, AFontName, AFontColor, ACaption, ACaptionColor: string);
+  ABgColor, AFontName, AFontColor, ACaption, ACaptionColor: string; AActiveTabIndex: Integer = 0);
 var
   LHTML, LJS, LCID, LCap: string;
   LCColor: string;
+  Tab0Style, Tab1Style: string;
 begin
   LCID := APanel.JSName + '_svc';
   LCap := ACaption;
@@ -212,12 +396,21 @@ begin
   LCap := StringReplace(LCap, '<', '&lt;', [rfReplaceAll]);
   LCap := StringReplace(LCap, '>', '&gt;', [rfReplaceAll]);
   LCap := StringReplace(LCap, '"', '&quot;', [rfReplaceAll]);
-  if Trim(LCap) = '' then
-    LCap := '&nbsp;';
-  if Trim(ACaptionColor) = '' then
-    LCColor := '#ffffff'
+
+  if Trim(LCap) = '' then LCap := '&nbsp;';
+  LCColor := IfThen(Trim(ACaptionColor) = '', '#ffffff', ACaptionColor);
+
+  // Определяем начальные стили для вкладок в зависимости от параметра
+  if AActiveTabIndex = 0 then
+  begin
+    Tab0Style := 'background:rgba(255,255,255,0.1); opacity:1;';
+    Tab1Style := 'background:transparent; opacity:0.5;';
+  end
   else
-    LCColor := ACaptionColor;
+  begin
+    Tab0Style := 'background:transparent; opacity:0.5;';
+    Tab1Style := 'background:rgba(255,255,255,0.1); opacity:1;';
+  end;
 
   LHTML :=
     '<div id="' + LCID + '_msk" style="position:fixed; top:0; left:0; width:100vw; height:100vh; ' +
@@ -226,145 +419,103 @@ begin
     '  <div style="position:relative; width:92%; max-width:500px; height:85%; background:' + ABgColor + '; ' +
     '    border-radius:32px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 30px 60px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1);">' +
 
+    // Шапка
     '    <div style="position:relative; flex-shrink:0; min-height:52px; box-sizing:border-box; border-bottom:1px solid rgba(255,255,255,0.08); padding:12px 56px 12px 16px;">' +
-    '      <div style="text-align:center; padding:8px 0; font-family:' + #39 + AFontName + #39 + '; font-size:28px; font-weight:600; line-height:1.3; color:' + LCColor + ';">' + LCap + '</div>' +
-    '    <div onclick="ajaxRequest(' + APanel.JSName + ', ''srvPanelClosed'', []); document.getElementById(''' + LCID + '_msk'').remove();" ' +
-    '      style="position:absolute; top:12px; right:12px; width:40px; height:40px; background:#ef4444; color:#fff; ' +
-    '      border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:20px; font-weight:bold; font-family:' + #39 + AFontName + #39 + '; z-index:100; box-shadow:0 4px 12px rgba(239,68,68,0.45);">✕</div>' +
+    '      <div style="text-align:center; padding:8px 0; font-family:' + AFontName + '; font-size:28px; font-weight:600; line-height:1.3; color:' + LCColor + ';">' + LCap + '</div>' +
+    '      <div onclick="ajaxRequest(' + APanel.JSName + ', ''srvPanelClosed'', []); document.getElementById(''' + LCID + '_msk'').remove();" ' +
+    '        style="position:absolute; top:12px; right:12px; width:40px; height:40px; background:#ef4444; color:#fff; ' +
+    '        border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:20px; font-weight:bold; z-index:100;">✕</div>' +
     '    </div>' +
 
-    '    <div style="flex:1; overflow-y:auto; padding:20px 20px 20px 20px;">' +
+    // Вкладки с применением начальных стилей
+    '    <div style="display:flex; background:rgba(0,0,0,0.1); padding:8px; gap:8px; flex-shrink:0;">' +
+    '      <div id="' + LCID + '_tab0" onclick="window._switchTab(0)" style="flex:1; text-align:center; padding:12px; border-radius:16px; cursor:pointer; font-weight:600; transition:0.3s; color:#fff; ' + Tab0Style + '">Сервис</div>' +
+    '      <div id="' + LCID + '_tab1" onclick="window._switchTab(1)" style="flex:1; text-align:center; padding:12px; border-radius:16px; cursor:pointer; font-weight:600; transition:0.3s; color:#fff; ' + Tab1Style + '">Ремонт</div>' +
+    '    </div>' +
+
+    // Таблица данных
+    '    <div style="flex:1; overflow-y:auto; padding:10px 20px;">' +
     '      <table style="width:100%; border-collapse:separate; border-spacing:0 10px; color:' + AFontColor + ';">' +
     '        <tbody id="' + LCID + '_tb"></tbody>' +
     '      </table>' +
     '    </div>' +
 
-    // --- ИЗМЕНЕНИЯ ЗДЕСЬ: Увеличили max-height и изменили bottom ---
+    // Выпадающий список
     '    <div id="' + LCID + '_drop" style="display:none; position:absolute; bottom:110px; left:25px; right:25px; ' +
     '      max-height:350px; background:white; border-radius:18px; overflow-y:auto; z-index:3000; ' +
     '      box-shadow:0 -10px 40px rgba(0,0,0,0.4); border:1px solid #ccc;"></div>' +
 
+    // Оверлей добавления (счетчик)
     '    <div id="' + LCID + '_fcd" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; ' +
     '      background:rgba(0,0,0,0.95); color:#fff; z-index:4000; flex-direction:column; justify-content:center; align-items:center; text-align:center;">' +
-    '      <div style="margin-bottom:10px; font-size:14px; font-family:' + AFontName + '; letter-spacing:2px; opacity:0.6; text-transform:uppercase;">Добавление:</div>' +
-    '      <div id="' + LCID + '_itm" style="font-size:28px; font-family:' + AFontName + '; font-weight:bold; color:#fbbf24; padding:0 20px; margin-bottom:20px;">---</div>' +
-    '      <div id="' + LCID + '_num" style="font-size:140px; font-family:' + AFontName + '; font-weight:900; color:#fff; margin:20px 0; line-height:1;">5</div>' +
-    '      <button onclick="window._cancelSvc()" style="margin-top:40px; width:220px; height:65px; background:#ef4444; color:white; ' +
-    '        border:none; border-radius:20px; font-size:18px; font-family:' + AFontName + '; font-weight:bold; box-shadow:0 10px 20px rgba(239,68,68,0.3);">ОТМЕНА</button>' +
+    '      <div id="' + LCID + '_itm" style="font-size:28px; font-weight:bold; color:#fbbf24; margin-bottom:20px;">---</div>' +
+    '      <div id="' + LCID + '_num" style="font-size:140px; font-weight:900;">5</div>' +
+    '      <button onclick="window._cancelSvc()" style="margin-top:40px; width:220px; height:65px; background:#ef4444; color:white; border:none; border-radius:20px; font-weight:bold;">ОТМЕНА</button>' +
     '    </div>' +
 
+    // Нижняя панель
     '    <div style="padding:25px; background:rgba(0,0,0,0.2); display:flex; gap:12px; border-top:1px solid rgba(255,255,255,0.05);">' +
     '      <div id="' + LCID + '_cb" style="flex:1; height:55px; border-radius:18px; background:rgba(255,255,255,0.9); ' +
-    '        padding:0 15px; font-family:' + AFontName + '; font-size:16px; font-weight:600; color:#000; display:flex; align-items:center; cursor:pointer; overflow:hidden;">Выберите...</div>' +
+    '        padding:0 15px; font-size:16px; font-weight:600; color:#000; display:flex; align-items:center; cursor:pointer;">Выберите...</div>' +
     '      <div id="' + LCID + '_add" style="width:65px; height:55px; background:#10b981; color:#fff; border-radius:18px; ' +
-    '        display:flex; align-items:center; justify-content:center; font-family:' + AFontName + '; font-size:32px; cursor:pointer; box-shadow:0 8px 15px rgba(16,185,129,0.2); font-weight:300;">+</div>' +
+    '        display:flex; align-items:center; justify-content:center; font-size:32px; cursor:pointer;">+</div>' +
     '    </div>' +
     '  </div>' +
     '</div>';
 
   LJS := Format(
-    // Чистим старую маску перед созданием новой
     'var old=document.getElementById("%0:s_msk"); if(old)old.remove();' +
-    // Рисуем основной HTML
     'document.body.insertAdjacentHTML("beforeend", `%1:s`);' +
-    // Массив данных, список опций, ссылки на элементы DOM
     'var d=%2:s, opts=%3:s, b=document.getElementById("%0:s_tb"), cb=document.getElementById("%0:s_cb"), drop=document.getElementById("%0:s_drop");' +
     'var selVal="", selTxt="Выберите...";' +
 
-    //    // Настройка элементов выпадающего списка
-    //    'opts.forEach(function(o){ var k=Object.keys(o), id=o[k[0]], txt=o[k[1]||k[0]];' +
-    //    '  var row=document.createElement("div"); row.style.padding="18px 15px";' +
-    //    // Делаем цвет фона светлее на 30% через color-mix. Переменная цвета в конце массива Format
-    //    '  row.style.background="color-mix(in srgb, %5:s, white 30%%)";' +
-    //    '  row.style.borderBottom="1px solid rgba(0,0,0,0.1)";' +
-    //    '  row.style.fontFamily="%4:s"; row.innerText=txt; row.onclick=function(){' +
-    //    '    selVal=id; selTxt=txt; cb.innerText=txt; drop.style.display="none";' +
-    //    '  }; drop.appendChild(row);' +
-    //    '});' +
+    // Инициализация активного таба из параметра Delphi
+    'window._activeTab = %7:d;' +
 
-    // Настройка элементов выпадающего списка
-    'var bgCol = %5:s;' +
-    'var lightBg = "color-mix(in srgb, " + bgCol + ", black 30%%)";' +
-    'drop.style.background = lightBg;' + // Красим подложку списка
+    'window._switchTab = function(idx) {' +
+    '  if(window._activeTab === idx) return;' +
+    '  window._activeTab = idx;' +
+    '  [0,1].forEach(function(i){ ' +
+    '    var t = document.getElementById("%0:s_tab"+i);' +
+    '    t.style.background = (i===idx) ? "rgba(255,255,255,0.1)" : "transparent";' +
+    '    t.style.opacity = (i===idx) ? "1" : "0.5";' +
+    '  });' +
+    '  ajaxRequest(%6:s, "tabChanged", ["index="+idx]);' +
+    '};' +
 
+    // Dropdown настройки
+    'var bgCol = %5:s; drop.style.background = "color-mix(in srgb, " + bgCol + ", black 30%%)";' +
     'opts.forEach(function(o){ ' +
     '  var k=Object.keys(o), id=o[k[0]], txt=o[k[1]||k[0]];' +
-    '  var row=document.createElement("div"); ' +
-    '  row.style.padding="18px 15px"; ' +
-    '  row.style.borderBottom="1px solid rgba(255,255,255,0.1)";' +
-    '  row.style.color="#ffffff";' + // Белый текст
-    '  row.style.fontFamily="%4:s"; ' +
-    '  row.innerText=txt; ' +
-    '  row.style.background="transparent";' + // Строки прозрачные, фон берем у drop
-
-    '  row.onclick=function(e){ ' +
-    '    e.stopPropagation(); ' +
-    '    selVal=id; selTxt=txt; cb.innerText=txt; drop.style.display="none"; ' +
-    '  }; ' +
-
-    // Эффект при клике/наведении (опционально, чтобы видеть выбор)
-    '  row.onmousedown=function(){ this.style.background="rgba(255,255,255,0.1)"; };' +
-    '  row.onmouseup=function(){ this.style.background="transparent"; };' +
-
-    '  drop.appendChild(row);' +
+    '  var row=document.createElement("div"); row.style.padding="18px 15px"; row.style.borderBottom="1px solid rgba(255,255,255,0.1)";' +
+    '  row.style.color="#ffffff"; row.innerText=txt; row.onclick=function(e){ ' +
+    '    e.stopPropagation(); selVal=id; selTxt=txt; cb.innerText=txt; drop.style.display="none"; ' +
+    '  }; drop.appendChild(row);' +
     '});' +
 
-
-    // Показ/скрытие списка при клике на комбобокс
     'cb.onclick=function(e){ e.stopPropagation(); drop.style.display=(drop.style.display==="none"?"block":"none"); };' +
-    // Закрытие списка при клике мимо
-    'document.addEventListener("click", function(){ drop.style.display="none"; }, {once:false});' +
+    'document.addEventListener("click", function(){ if(drop) drop.style.display="none"; }, {once:false});' +
 
-    // Отрисовка таблицы с данными
+    // Отрисовка таблицы
     'var draw=function(da){ b.innerHTML=""; da.forEach(function(r){ ' +
-    '  var tr=b.insertRow(); tr.style.background="rgba(255,255,255,0.03)"; tr.style.borderRadius="12px";' +
+    '  var tr=b.insertRow(); tr.style.background="rgba(255,255,255,0.03)"; ' +
     '  var ks=Object.keys(r); ks.forEach(function(k,i){ ' +
     '    var td=tr.insertCell(); td.style.padding="15px 12px"; td.innerText=r[k]; ' +
     '    if(i===0) td.style.borderRadius="12px 0 0 12px"; if(i===ks.length-1) td.style.borderRadius="0 12px 12px 0";' +
     '  }); }); }; draw(d);' +
 
-    // Глобальная функция отмены добавления
-    'var timer=null; window._cancelSvc=function(){ clearInterval(timer); document.getElementById("%0:s_fcd").style.display="none"; };' +
-
-//    // Логика кнопки "+" с обратным отсчетом
-//    'document.getElementById("%0:s_add").onclick=function(){ ' +
-//    '  if(!selVal) return; ' +
-//    '  var v=selTxt, id=selVal, cd=document.getElementById("%0:s_fcd"), ' +
-//    '      nm=document.getElementById("%0:s_num"), itm=document.getElementById("%0:s_itm"), count=5;' +
-//    '  itm.innerText=v; cd.style.display="flex"; nm.innerText=count;' +
-//    '  timer=setInterval(function(){ count--; nm.innerText=count; ' +
-//    '    if(count<=0){ clearInterval(timer); cd.style.display="none"; ' +
-//    // Добавление в массив и отправка уведомления на сервер Delphi
-//    '      var ds=new Date().toLocaleString("ru-RU").replace(",",""), ks=Object.keys(d[0]||{"p":"","v":"","d":""}), n={}; ' +
-//    '      n[ks[0]]=(d[0]?d[0][ks[0]]:""); n[ks[1]]=v; n[ks[2]]=ds; d.unshift(n); draw(d); ' +
-//    '      ajaxRequest(%6:s, "itemAdded", ["id="+id, "val="+v]); ' +
-//    '    } }, 1000); ' +
-//    '};',
-
-    // Логика кнопки "+" с обратным отсчетом и звуком
-    'document.getElementById("%0:s_add").onclick=function(){ ' +
+    // Кнопка "+" и звук
+    'var timer=null; document.getElementById("%0:s_add").onclick=function(){ ' +
     '  if(!selVal) return; ' +
-    '  var v=selTxt, id=selVal, cd=document.getElementById("%0:s_fcd"), ' +
-    '      nm=document.getElementById("%0:s_num"), itm=document.getElementById("%0:s_itm"), count=5;' +
-
-    // Создаем и запускаем аудио
+    '  var v=selTxt, id=selVal, cd=document.getElementById("%0:s_fcd"), nm=document.getElementById("%0:s_num"), itm=document.getElementById("%0:s_itm"), count=5;' +
     '  var snd = new Audio("files/src-media/warning.mp3"); snd.loop = true; snd.play(); ' +
-
     '  itm.innerText=v; cd.style.display="flex"; nm.innerText=count;' +
-
-    // Переопределяем функцию отмены, чтобы она выключала именно этот звук
-    '  window._cancelSvc=function(){ ' +
-    '    clearInterval(timer); snd.pause(); snd.currentTime = 0; ' +
-    '    document.getElementById("%0:s_fcd").style.display="none"; ' +
-    '  }; ' +
-
+    '  window._cancelSvc=function(){ clearInterval(timer); if(snd){snd.pause(); snd.currentTime=0;} cd.style.display="none"; }; ' +
     '  timer=setInterval(function(){ count--; nm.innerText=count; ' +
-    '    if(count<=0){ ' +
-    '      clearInterval(timer); snd.pause(); snd.currentTime = 0; ' + // Стоп звук по окончании
-    '      cd.style.display="none"; ' +
+    '    if(count<=0){ clearInterval(timer); snd.pause(); cd.style.display="none"; ' +
     '      var ds=new Date().toLocaleString("ru-RU").replace(",",""), ks=Object.keys(d[0]||{"p":"","v":"","d":""}), n={}; ' +
     '      n[ks[0]]=(d[0]?d[0][ks[0]]:""); n[ks[1]]=v; n[ks[2]]=ds; d.unshift(n); draw(d); ' +
-    '      ajaxRequest(%6:s, "itemAdded", ["id="+id, "val="+v]); ' +
+    '      ajaxRequest(%6:s, "itemAdded", ["id="+id, "val="+v, "tab="+window._activeTab]); ' +
     '    } }, 1000); ' +
     '};',
 
@@ -372,8 +523,9 @@ begin
      IfThen(ADataJSON = '', '[]', ADataJSON),
      IfThen(AComboBoxJSON = '', '[]', AComboBoxJSON),
      AFontName,
-     QuotedStr(ABgColor), // %5:s - Цвет фона в кавычках для CSS
-     APanel.JSName        // %6:s - Имя панели для ajaxRequest
+     QuotedStr(ABgColor),
+     APanel.JSName,
+     AActiveTabIndex // %7:d
     ]);
 
   UniSession.AddJS(LJS);
@@ -608,7 +760,7 @@ begin
       '  @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }' +
       '</style>' +
       '<div id="' + LCID + '_exit" onclick="ajaxRequest(window[''' + LCID + '''], ''exitScanner'', []);" ' +
-      'style="position:absolute; top:10px; left:93%; transform:translateX(-50%); width:35px; height:35px; ' +
+      'style="position:absolute; top:5px; left:95.5%; transform:translateX(-50%); width:27px; height:27px; ' +
       'background:#ef4444; border-radius:50%; display:flex; align-items:center; justify-content:center; ' +
       'color:white; box-shadow:0 0 15px rgba(0,0,0,0.7); z-index:999; overflow:hidden;">' +
         // Этот div внутри создаст крутящуюся линию
