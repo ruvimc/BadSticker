@@ -10,7 +10,7 @@ uses
   uniGUImJSForm,
   uniGUIBaseClasses, uniPanel, uniHTMLFrame, uniBasicGrid, uniDBGrid,
   unimDBListGrid, unimDBGrid, unimPanel, unimHTMLFrame, uSettings, Web.HTTPApp,
-  Data.DB, MemDS, Vcl.Imaging.pngimage, uniImage, unimImage;
+  Data.DB, MemDS, Vcl.Imaging.pngimage, uniImage, unimImage, uniTimer, unimTimer;
 
 type
   TQREquipAction = (qraNone, qraService, qraStart, qraStop, qraBlock);
@@ -63,11 +63,14 @@ type
     imgBg: TUnimImage;
     qryEquipFixList: TMyQuery;
     qryEquipFixStatuses: TMyQuery;
+    tmrResetCounter: TUnimTimer;
     procedure pnlScanAjaxEvent(Sender: TComponent; EventName: string;
       Params: TUniStrings);
     procedure UnimFormCreate(Sender: TObject);
     procedure UnimFormAjaxEvent(Sender: TComponent; EventName: string;
       Params: TUniStrings);
+    procedure imgBgClick(Sender: TObject);
+    procedure tmrResetCounterTimer(Sender: TObject);
   private
     FSettings: TSettings;
     FConnection: TMyConnection;
@@ -214,6 +217,12 @@ const
   SVG_ROLL = '<svg viewBox="0 0 24 24" width="51" height="51" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6"></path></svg>';
 
   DATAMATRIX_PROF_ID = 9;
+
+  ADMIN_CLICK_COUNT = 16;
+
+var
+  GAdminClickCounter: Byte;
+  IsOutWork: Boolean;
 
 procedure AddGyroRotation(APanel: TUnimPanel; AMaxDeg: Integer = 5);
 var
@@ -629,16 +638,27 @@ begin
   SetSidePanelState(False)
 end;
 
-{
-procedure TMainmForm.ShowInfoPanel(ATableDataJson: string);
+procedure TMainmForm.imgBgClick(Sender: TObject);
 begin
-  UniSession.AddJS(pnlScan.JSName + '.renderTable(''' + ATableDataJson + ''');');
+  Inc(GAdminClickCounter);
+  if GAdminClickCounter = 10 then
+    Toast('Еще чуть-чуть и ты это сделаешь...', alBottom);
+  if GAdminClickCounter = ADMIN_CLICK_COUNT then
+  begin
+    Toast('А ты упрямый...', alBottom);
+    pnlScan.Visible := True;
+    imgBg.Visible := False;
+  end;
 end;
-}
 
 procedure TMainmForm.ShowProcessPanel(AShow: Boolean);
 begin
   UniSession.AddJS(pnlScan.JSName + '.showProcessPanel('+ IfThen(AShow, 'true', 'false') +');');
+end;
+
+procedure TMainmForm.tmrResetCounterTimer(Sender: TObject);
+begin
+  GAdminClickCounter := 0;
 end;
 
 procedure TMainmForm.ToggleCamera(AOnOff: Boolean);
@@ -703,7 +723,9 @@ begin
     begin
       Toast('Доступ вне работы <br> <br> ЗАПРЕЩЕН <br> <br> Не балуйся 🤡', alClient);
       MainmForm.Color := clBlack;
-      pnlScan.Visible := False
+      pnlScan.Visible := False;
+      DestroyWorkTracker(pnlScan);
+      IsOutWork := True;
     end
     else
       FadeOutAndDestroy(imgBg, 2000);
@@ -716,7 +738,8 @@ begin
     if not FQRUserId.IsEmpty and IsValidUser(FQRUserId) then
     begin
       FUserMode := GetUserMode(FQRUserId);
-      ShowWorkTracker(pnlScan, '#000000', 'Cera Round', 'rgba(40, 40, 40, 0.9)', 5, 0.50);
+      if not IsOutWork then
+        ShowWorkTracker(pnlScan, '#000000', 'Cera Round', 'rgba(40, 40, 40, 0.9)', 5, 0.50);
       FastShowCustomScanner;
     end
     else

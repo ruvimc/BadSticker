@@ -1612,6 +1612,7 @@ object MainmForm: TMainmForm
       FF0964E5306A85182F0000000049454E44AE426082}
     Flex = 1
     OnAjaxEvent = pnlScanAjaxEvent
+    OnClick = imgBgClick
   end
   object qryRashodnik: TMyQuery
     SQL.Strings = (
@@ -2083,5 +2084,16 @@ object MainmForm: TMainmForm
     Options.FieldOrigins = foNone
     Left = 128
     Top = 464
+  end
+  object tmrResetCounter: TUnimTimer
+    Interval = 5000
+    ClientEvent.Strings = (
+      'function(sender)'
+      '{'
+      ' '
+      '}')
+    OnTimer = tmrResetCounterTimer
+    Left = 232
+    Top = 472
   end
 end
