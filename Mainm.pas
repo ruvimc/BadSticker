@@ -65,6 +65,7 @@ type
     qryEquipFixStatuses: TMyQuery;
     tmrResetCounter: TUnimTimer;
     qryGetEqStartEvent: TMyQuery;
+    timerInit: TUnimTimer;
     procedure pnlScanAjaxEvent(Sender: TComponent; EventName: string;
       Params: TUniStrings);
     procedure UnimFormCreate(Sender: TObject);
@@ -72,6 +73,7 @@ type
       Params: TUniStrings);
     procedure imgBgClick(Sender: TObject);
     procedure tmrResetCounterTimer(Sender: TObject);
+    procedure timerInitTimer(Sender: TObject);
   private
     FSettings: TSettings;
     FConnection: TMyConnection;
@@ -659,6 +661,17 @@ begin
   UniSession.AddJS(pnlScan.JSName + '.showProcessPanel('+ IfThen(AShow, 'true', 'false') +');');
 end;
 
+procedure TMainmForm.timerInitTimer(Sender: TObject);
+begin
+  if IsPersonEquipAssigned then
+  begin
+    FCurrentEquipName := GetEquipName(FPersonEqupmentId);
+    SetEquipCaption(FCurrentEquipName);
+    GetRollStatus(FPersonEqupmentId);
+    timerInit.Enabled := False;
+  end;
+end;
+
 procedure TMainmForm.tmrResetCounterTimer(Sender: TObject);
 begin
   GAdminClickCounter := 0;
@@ -935,7 +948,8 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
     RollStatusOff;
     EquipStatusOff;
     SetRollCaption('-');
-    SetEquipCaption('-');
+    if not IsPersonEquipAssigned then
+      SetEquipCaption('-');
     ToggleCamera(True);
     FRollMode := False;
     FEquipMode := False;
@@ -946,7 +960,8 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
     RollStatusOff;
     EquipStatusOff;
     SetRollCaption('-');
-    SetEquipCaption('-');
+    if not IsPersonEquipAssigned then
+      SetEquipCaption('-');
     ToggleCamera(False);
     FRollMode := False;
     FEquipMode := False;
@@ -961,7 +976,8 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
     EquipStatusOff;
     RollStatusOff;
     SetRollCaption('-');
-    SetEquipCaption('-');
+    if not IsPersonEquipAssigned then
+      SetEquipCaption('-');
     FCurrentRollId := EmptyStr;
     FCurrentEquipName := EmptyStr;
     FCurrentBlockId := 0;
@@ -1124,12 +1140,22 @@ begin
   else if EventName = 'sheetClosed' then
   begin
     HideAddInfoPanel;
+    if IsPersonEquipAssigned then
+    begin
+      AfterStart;
+    end;
   end
   else
   if (EventName = 'nodeEqClick') and IsPersonEquipAssigned then
   begin
     LoadDataToInfoTable(FRollStatusJson);
     ShowAddInfoPanel
+  end
+  else
+  if (EventName = 'nodeRollClick') and IsPersonEquipAssigned then
+  begin
+    LoadDataToInfoTable(FBlockInfoJson);
+    ShowAddInfoPanel;
   end;
 end;
 
@@ -1185,8 +1211,6 @@ begin
     InitEquipMode(LQR);
     LQR := TQRData.Parse(ACode);
     FBlockInfoJson := GetBlockInfo(LQR.BlockId);
-    LoadDataToInfoTable(FBlockInfoJson);
-    ShowAddInfoPanel;
   end
   else
     LQR := TQRData.Parse(ACode);

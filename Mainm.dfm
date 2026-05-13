@@ -2115,4 +2115,15 @@ object MainmForm: TMainmForm
         Value = nil
       end>
   end
+  object timerInit: TUnimTimer
+    RunOnce = True
+    ClientEvent.Strings = (
+      'function(sender)'
+      '{'
+      ' '
+      '}')
+    OnTimer = timerInitTimer
+    Left = 232
+    Top = 352
+  end
 end
