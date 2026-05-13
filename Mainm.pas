@@ -64,6 +64,7 @@ type
     qryEquipFixList: TMyQuery;
     qryEquipFixStatuses: TMyQuery;
     tmrResetCounter: TUnimTimer;
+    qryGetEqStartEvent: TMyQuery;
     procedure pnlScanAjaxEvent(Sender: TComponent; EventName: string;
       Params: TUniStrings);
     procedure UnimFormCreate(Sender: TObject);
@@ -148,6 +149,7 @@ type
     procedure GetEquipFixList(AEquipId: string);
     procedure UpdatePersonWorkflow(AStatus: TPersonWorkflowStatus);
     function IsPersonEquipAssigned: Boolean;
+    function GetEquipStartEvent(AEquipid: string): string;
   end;
 
   TDatasetHelper = class helper for TMyQuery
@@ -707,6 +709,7 @@ begin
     qryLastRollBlockInfo.Connection := FConnection;
     qryEquipFixList.Connection := FConnection;
     qryEquipFixStatuses.Connection := FConnection;
+    qryGetEqStartEvent.Connection := FConnection;
     RegisterFormReady;
   finally
     FSettings.Free;
@@ -802,6 +805,14 @@ begin
   qryEquipName.ParamByName('eqId').AsString := AEqipId;
   qryEquipName.Open;
   Result := qryEquipName.FieldByName('eqname').AsString;
+end;
+
+function TMainmForm.GetEquipStartEvent(AEquipid: string): string;
+begin
+  qryGetEqStartEvent.Close;
+  qryGetEqStartEvent.ParamByName('eqId').AsString;
+  qryGetEqStartEvent.Open;
+  Result := qryGetEqStartEvent.FieldByName('eqStartEvent').AsString;
 end;
 
 function TMainmForm.GetPersonProf: Boolean;
@@ -1158,13 +1169,15 @@ procedure TMainmForm.HandleScanSuccess(const ACode, AMode, ASubMode: string);
 var
   LQR: TQRData;
   LMode: TUserMode;
+  LFullEqCode: string;
 begin
   // Если для к работнику привязано оборудование, то работник не сможет отсканировтаь другое оборудование
   if IsPersonEquipAssigned then
   begin
     LQR := TQRData.Parse(FPersonEqupmentId);
     InitEquipMode(LQR);
-    LQR := TQRData.Parse(ACode);
+    LFullEqCode := Concat(ACode, QR_CODE_VAL_DELIM, GetEquipStartEvent(ACode));
+    LQR := TQRData.Parse(LFullEqCode);
     FBlockInfoJson := GetBlockInfo(LQR.BlockId);
     LoadDataToInfoTable(FBlockInfoJson);
     ShowAddInfoPanel;
