@@ -1,0 +1,1 @@
+ALTER TABLE person ADD COLUMN person_equip_id varchar(10) DEFAULT NULL;

@@ -2096,4 +2096,34 @@ object MainmForm: TMainmForm
     Left = 232
     Top = 472
   end
+  object qryGetEqStartEvent: TMyQuery
+    SQL.Strings = (
+      
+        'SELECT et.equipment_type_start_event eqStartEvent FROM equipment' +
+        ' e'
+      
+        'LEFT JOIN equipment_type et ON et.equipment_type_id = e.equipmen' +
+        't_type_id'
+      'WHERE e.equipment_id = :eqId')
+    Options.FieldOrigins = foNone
+    Left = 216
+    Top = 424
+    ParamData = <
+      item
+        DataType = ftUnknown
+        Name = 'eqId'
+        Value = nil
+      end>
+  end
+  object timerInit: TUnimTimer
+    RunOnce = True
+    ClientEvent.Strings = (
+      'function(sender)'
+      '{'
+      ' '
+      '}')
+    OnTimer = timerInitTimer
+    Left = 232
+    Top = 352
+  end
 end

@@ -64,6 +64,8 @@ type
     qryEquipFixList: TMyQuery;
     qryEquipFixStatuses: TMyQuery;
     tmrResetCounter: TUnimTimer;
+    qryGetEqStartEvent: TMyQuery;
+    timerInit: TUnimTimer;
     procedure pnlScanAjaxEvent(Sender: TComponent; EventName: string;
       Params: TUniStrings);
     procedure UnimFormCreate(Sender: TObject);
@@ -71,6 +73,7 @@ type
       Params: TUniStrings);
     procedure imgBgClick(Sender: TObject);
     procedure tmrResetCounterTimer(Sender: TObject);
+    procedure timerInitTimer(Sender: TObject);
   private
     FSettings: TSettings;
     FConnection: TMyConnection;
@@ -84,7 +87,7 @@ type
       FBlocksWorkflowIsStarted: Boolean;
     FCurrentEquipAction, FCurrentEquipActionPrefix, FFixComment: string;
     FRollInfoJson, FRollStatusJson, FBlockInfoJson, FEquipFixListJson,
-     FEquipFixStatusesJson: string;
+     FEquipFixStatusesJson, FPersonEqupmentId: string;
     FIsAfterLogin: Boolean;
     FRashodnikId, FFixId, FServiceTab: Integer;
     FInfoMode, FBlockMode, FBlockAssignMode, FBlockWorkflowMode: Boolean;
@@ -147,6 +150,8 @@ type
     procedure SetWorkflowCaption(ACaption: string);
     procedure GetEquipFixList(AEquipId: string);
     procedure UpdatePersonWorkflow(AStatus: TPersonWorkflowStatus);
+    function IsPersonEquipAssigned: Boolean;
+    function GetEquipStartEvent(AEquipid: string): string;
   end;
 
   TDatasetHelper = class helper for TMyQuery
@@ -656,6 +661,17 @@ begin
   UniSession.AddJS(pnlScan.JSName + '.showProcessPanel('+ IfThen(AShow, 'true', 'false') +');');
 end;
 
+procedure TMainmForm.timerInitTimer(Sender: TObject);
+begin
+  if IsPersonEquipAssigned then
+  begin
+    FCurrentEquipName := GetEquipName(FPersonEqupmentId);
+    SetEquipCaption(FCurrentEquipName);
+    GetRollStatus(FPersonEqupmentId);
+    timerInit.Enabled := False;
+  end;
+end;
+
 procedure TMainmForm.tmrResetCounterTimer(Sender: TObject);
 begin
   GAdminClickCounter := 0;
@@ -706,6 +722,7 @@ begin
     qryLastRollBlockInfo.Connection := FConnection;
     qryEquipFixList.Connection := FConnection;
     qryEquipFixStatuses.Connection := FConnection;
+    qryGetEqStartEvent.Connection := FConnection;
     RegisterFormReady;
   finally
     FSettings.Free;
@@ -801,6 +818,14 @@ begin
   qryEquipName.ParamByName('eqId').AsString := AEqipId;
   qryEquipName.Open;
   Result := qryEquipName.FieldByName('eqname').AsString;
+end;
+
+function TMainmForm.GetEquipStartEvent(AEquipid: string): string;
+begin
+  qryGetEqStartEvent.Close;
+  qryGetEqStartEvent.ParamByName('eqId').AsString := AEquipid;
+  qryGetEqStartEvent.Open;
+  Result := qryGetEqStartEvent.FieldByName('eqStartEvent').AsString;
 end;
 
 function TMainmForm.GetPersonProf: Boolean;
@@ -923,7 +948,8 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
     RollStatusOff;
     EquipStatusOff;
     SetRollCaption('-');
-    SetEquipCaption('-');
+    if not IsPersonEquipAssigned then
+      SetEquipCaption('-');
     ToggleCamera(True);
     FRollMode := False;
     FEquipMode := False;
@@ -934,7 +960,8 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
     RollStatusOff;
     EquipStatusOff;
     SetRollCaption('-');
-    SetEquipCaption('-');
+    if not IsPersonEquipAssigned then
+      SetEquipCaption('-');
     ToggleCamera(False);
     FRollMode := False;
     FEquipMode := False;
@@ -949,7 +976,8 @@ procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Par
     EquipStatusOff;
     RollStatusOff;
     SetRollCaption('-');
-    SetEquipCaption('-');
+    if not IsPersonEquipAssigned then
+      SetEquipCaption('-');
     FCurrentRollId := EmptyStr;
     FCurrentEquipName := EmptyStr;
     FCurrentBlockId := 0;
@@ -1112,6 +1140,22 @@ begin
   else if EventName = 'sheetClosed' then
   begin
     HideAddInfoPanel;
+    if IsPersonEquipAssigned then
+    begin
+      AfterStart;
+    end;
+  end
+  else
+  if (EventName = 'nodeEqClick') and IsPersonEquipAssigned then
+  begin
+    LoadDataToInfoTable(FRollStatusJson);
+    ShowAddInfoPanel
+  end
+  else
+  if (EventName = 'nodeRollClick') and IsPersonEquipAssigned then
+  begin
+    LoadDataToInfoTable(FBlockInfoJson);
+    ShowAddInfoPanel;
   end;
 end;
 
@@ -1128,11 +1172,48 @@ procedure TMainmForm.HandleScanSuccess(const ACode, AMode, ASubMode: string);
     Exit;
   end;
 
+  procedure InitEquipMode(ALQR: TQRData);
+  begin
+    FEquipMode := True;
+    SetElementSvg('node_eq', SVG_EQUIP);
+    FCurrentEquipAction := ALQR.ActionCode;
+    EquipEventToRollStatus(FCurrentEquipAction.ToInteger - 1);
+    FCurrentEquipId := ALQR.EquipId;
+    GetEquipFixList(FCurrentEquipId);
+    if FFixId = Ord(efsFixBegin) then
+    begin
+      Toast('Оборудование в ремонте');
+      FBlockMode := False;
+      ToggleCamera(False);
+      FFixId := 0;
+      Exit;
+    end;
+    FCurrentEquipName := GetEquipName(FCurrentEquipId);
+    SetEquipCaption(FCurrentEquipName);
+    RollActionButtons(True, False);
+    SetInfoMode;
+    UpdateInfoBadge('СТАРТ: ' + FCurrentEquipId + ' | РУЛОН: ' + FCurrentRollId);
+    EquipStatusOn;
+    GetRollStatus(FCurrentEquipId);
+    LoadDataToInfoTable(FRollStatusJson);
+  end;
+
 var
   LQR: TQRData;
   LMode: TUserMode;
+  LFullEqCode: string;
 begin
-  LQR := TQRData.Parse(ACode);
+  // Если для к работнику привязано оборудование, то работник не сможет отсканировтаь другое оборудование
+  if IsPersonEquipAssigned then
+  begin
+    LFullEqCode := Concat(FPersonEqupmentId, QR_CODE_VAL_DELIM, GetEquipStartEvent(FPersonEqupmentId));
+    LQR := TQRData.Parse(LFullEqCode);
+    InitEquipMode(LQR);
+    LQR := TQRData.Parse(ACode);
+    FBlockInfoJson := GetBlockInfo(LQR.BlockId);
+  end
+  else
+    LQR := TQRData.Parse(ACode);
   if FQRUserId.IsEmpty then
   begin
     if not LQR.UserId.IsEmpty then
@@ -1227,28 +1308,7 @@ begin
     begin
       if FEquipMode then
         Exit; { Защита от дублей в журнале }
-      FEquipMode := True;
-      SetElementSvg('node_eq', SVG_EQUIP);
-      FCurrentEquipAction := LQR.ActionCode;
-      EquipEventToRollStatus(FCurrentEquipAction.ToInteger - 1);
-      FCurrentEquipId := LQR.EquipId;
-      GetEquipFixList(FCurrentEquipId);
-      if FFixId = Ord(efsFixBegin) then
-      begin
-        Toast('Оборудование в ремонте');
-        FBlockMode := False;
-        ToggleCamera(False);
-        FFixId := 0;
-        Exit;
-      end;
-      FCurrentEquipName := GetEquipName(FCurrentEquipId);
-      SetEquipCaption(FCurrentEquipName);
-      RollActionButtons(True, False);
-      SetInfoMode;
-      UpdateInfoBadge('СТАРТ: ' + FCurrentEquipId + ' | РУЛОН: ' + FCurrentRollId);
-      EquipStatusOn;
-      GetRollStatus(FCurrentEquipId);
-      LoadDataToInfoTable(FRollStatusJson);
+      InitEquipMode(LQR);
       if FBlockMode then
         RunBlockWork;
     end;
@@ -1366,6 +1426,11 @@ end;
 
 }
 
+function TMainmForm.IsPersonEquipAssigned: Boolean;
+begin
+  Result := not FPersonEqupmentId.IsEmpty;
+end;
+
 function TMainmForm.IsRollFinished: Boolean;
 begin
   Result := FLastRollIsFinished
@@ -1379,6 +1444,7 @@ begin
   LUserId := Concat(QR_CODE_USER_DELIM, AQRUserId);
   qryPresonName.ParamByName('person_id').AsString := LUserId;
   qryPresonName.Open;
+  FPersonEqupmentId := qryPresonName.FieldByName('person_equip_id').AsString;
   Result := qryPresonName.FieldByName('person_id').AsString = LUserId;
   if Result then
     FPersonFio := qryPresonName.FieldByName('person_fio').AsString;

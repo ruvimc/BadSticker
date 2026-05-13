@@ -581,11 +581,17 @@ begin
   LProcessPanel :=
     '<div id="' + LCID + '_process_panel" style="display:none; flex:1; flex-direction:column; padding:15px 20px 30px; box-sizing:border-box; overflow-y:auto; position:relative; gap:15px;">' +
     '  ' +
-    '  <div style="display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.05); padding:20px 30px; border-radius:24px; border:1px solid rgba(255,255,255,0.1); gap:40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">' +
-    '    <div id="' + LCID + '_node_eq" style="color:#fff; opacity:0.3; transition:all 0.5s; display:flex; flex-direction:column; align-items:center; gap:12px;">' +
-           LSvgEquipBig + '<span style="font-size:14px; font-weight:bold;">' + ACurrentEquipId + '</span></div>' +
+//    '  <div style="display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.05); padding:20px 30px; border-radius:24px; border:1px solid rgba(255,255,255,0.1); gap:40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">' +
+//    '    <div id="' + LCID + '_node_eq" style="color:#fff; opacity:0.3; transition:all 0.5s; display:flex; flex-direction:column; align-items:center; gap:12px;">' +
+//           LSvgEquipBig + '<span style="font-size:14px; font-weight:bold;">' + ACurrentEquipId + '</span></div>' +
+
+      '  <div style="display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.05); padding:20px 30px; border-radius:24px; border:1px solid rgba(255,255,255,0.1); gap:40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">' +
+      '    <div id="' + LCID + '_node_eq" onclick="ajaxRequest(window[''' + LCID + '''], ''nodeEqClick'', [''equipId=' + ACurrentEquipId + '''])" style="color:#fff; opacity:0.3; transition:all 0.5s; display:flex; flex-direction:column; align-items:center; gap:12px; cursor:pointer;">' +
+             LSvgEquipBig + '<span style="font-size:14px; font-weight:bold;">' + ACurrentEquipId + '</span></div>' +
+
+
     '    <div style="width:2px; height:50px; background:rgba(255,255,255,0.1);"></div>' + // Разделитель внутри группы
-    '    <div id="' + LCID + '_node_roll" style="color:#fff; opacity:0.3; transition:all 0.5s; display:flex; flex-direction:column; align-items:center; gap:12px;">' +
+    '    <div id="' + LCID + '_node_roll" onclick="ajaxRequest(window[''' + LCID + '''], ''nodeRollClick'', [])" style="color:#fff; opacity:0.3; transition:all 0.5s; display:flex; flex-direction:column; align-items:center; gap:12px;">' +
            LSvgRollBig + '<span style="font-size:14px; font-weight:bold;">' + ACurrentRollId + '</span></div>' +
     '  </div>' +
     '  ' +
