@@ -1124,6 +1124,12 @@ begin
   else if EventName = 'sheetClosed' then
   begin
     HideAddInfoPanel;
+  end
+  else
+  if (EventName = 'nodeEqClick') and IsPersonEquipAssigned then
+  begin
+    LoadDataToInfoTable(FRollStatusJson);
+    ShowAddInfoPanel
   end;
 end;
 
