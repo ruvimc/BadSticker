@@ -810,7 +810,7 @@ end;
 function TMainmForm.GetEquipStartEvent(AEquipid: string): string;
 begin
   qryGetEqStartEvent.Close;
-  qryGetEqStartEvent.ParamByName('eqId').AsString;
+  qryGetEqStartEvent.ParamByName('eqId').AsString := AEquipid;
   qryGetEqStartEvent.Open;
   Result := qryGetEqStartEvent.FieldByName('eqStartEvent').AsString;
 end;
@@ -1174,10 +1174,10 @@ begin
   // Если для к работнику привязано оборудование, то работник не сможет отсканировтаь другое оборудование
   if IsPersonEquipAssigned then
   begin
-    LQR := TQRData.Parse(FPersonEqupmentId);
-    InitEquipMode(LQR);
-    LFullEqCode := Concat(ACode, QR_CODE_VAL_DELIM, GetEquipStartEvent(ACode));
+    LFullEqCode := Concat(FPersonEqupmentId, QR_CODE_VAL_DELIM, GetEquipStartEvent(FPersonEqupmentId));
     LQR := TQRData.Parse(LFullEqCode);
+    InitEquipMode(LQR);
+    LQR := TQRData.Parse(ACode);
     FBlockInfoJson := GetBlockInfo(LQR.BlockId);
     LoadDataToInfoTable(FBlockInfoJson);
     ShowAddInfoPanel;
