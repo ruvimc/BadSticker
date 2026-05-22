@@ -1061,7 +1061,7 @@ begin
     '  if(!p._camActive) return; ' +
     '  var view=document.getElementById("%0:s_view"); ' +
     '  var edge=Math.floor(Math.min(view.offsetWidth, view.offsetHeight)*%1:s); ' +
-    '  p._scanner.start({facingMode:"environment"}, {fps:25, qrbox:{width:edge,height:edge}}, ' +
+    '  p._scanner.start({facingMode:"environment"}, {fps:5, qrbox:{width:edge,height:edge}}, ' +
     '  function(t){ ' +
     '    var now=Date.now(); if(t===p._lastCode && (now-p._lastTime < 2500)) return; ' +
     '    p._lastCode=t; p._lastTime=now; ' +
