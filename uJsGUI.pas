@@ -945,6 +945,10 @@ begin
 
     // --- ФУНКЦИЯ: Старт/Стоп камеры ---
     'p.toggleCam=function(state){ ' +
+    '  if(state){ ' +
+    '    try{if(window.__bsOrientationLock&&window.__bsOrientationLock.isLandscape()){window.__bsOrientationLock.update();return;}}catch(e){} ' +
+    '    try{if(window.__bsOrientationLock)window.__bsOrientationLock.tryLock();}catch(e){} ' +
+    '  } ' +
     '  p._camActive=state; ' +
     '  var stub=document.getElementById("%0:s_cam_stub"); ' +
     '  var scanArea=document.getElementById("%0:s_scan_area"); ' +

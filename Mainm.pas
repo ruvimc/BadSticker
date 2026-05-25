@@ -310,6 +310,7 @@ begin
     '  }],' +
     '  "start_url": origin + "/",' +
     '  "display": "standalone",' +
+    '  "orientation": "portrait",' +
     '  "background_color": "#ffffff",' +
     '  "theme_color": "#000000"' +
     '};' +
@@ -326,6 +327,60 @@ begin
     'if ("serviceWorker" in navigator) {' +
     '  navigator.serviceWorker.register(swURL, {scope: "/"});' +
     '}'
+  );
+end;
+
+procedure RegisterOrientationLock(const AScannerPanelJsName: string);
+begin
+  UniSession.AddJS(
+    '(function(){' +
+    'var scanKey=' + QuotedStr(AScannerPanelJsName) + ';' +
+    'var ov=document.getElementById("bs-orient-lock");' +
+    'if(!ov){' +
+    '  ov=document.createElement("div");' +
+    '  ov.id="bs-orient-lock";' +
+    '  ov.style.cssText="display:none;position:fixed;inset:0;z-index:2147483646;background:#0f172a;color:#fff;" +' +
+    '    "flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;" +' +
+    '    "font-family:system-ui,sans-serif;box-sizing:border-box;";' +
+    '  ov.innerHTML=' +
+    '    "<div style=\"font-size:56px;margin-bottom:20px;line-height:1;\">📱</div>"+' +
+    '    "<div style=\"font-size:20px;font-weight:700;margin-bottom:8px;\">Поверните телефон вертикально</div>"+' +
+    '    "<div style=\"font-size:14px;opacity:.75;max-width:300px;line-height:1.45;\">" +' +
+    '    "В браузере поворот экрана не блокируется — просто верните устройство в портретный режим.</div>";' +
+    '  document.body.appendChild(ov);' +
+    '}' +
+    'var lockTs=0;' +
+    'function isLandscape(){' +
+    '  return window.matchMedia("(orientation: landscape)").matches||window.innerWidth>window.innerHeight;' +
+    '}' +
+    'function pauseScanner(){' +
+    '  try{var p=window[scanKey];if(p&&typeof p.toggleCam==="function")p.toggleCam(false);}catch(e){}' +
+    '}' +
+    'function tryLock(){' +
+    '  var now=Date.now(); if(now-lockTs<800)return; lockTs=now;' +
+    '  try{' +
+    '    if(screen.orientation&&screen.orientation.lock){' +
+    '      screen.orientation.lock("portrait-primary").catch(function(){});' +
+    '    }else if(screen.lockOrientation){screen.lockOrientation("portrait-primary");}' +
+    '    else if(screen.mozLockOrientation){screen.mozLockOrientation("portrait-primary");}' +
+    '    else if(screen.msLockOrientation){screen.msLockOrientation("portrait-primary");}' +
+    '  }catch(e){}' +
+    '}' +
+    'function update(){' +
+    '  var land=isLandscape();' +
+    '  ov.style.display=land?"flex":"none";' +
+    '  document.documentElement.style.overflow=land?"hidden":"";' +
+    '  document.body.style.overflow=land?"hidden":"";' +
+    '  if(land)pauseScanner();' +
+    '}' +
+    'window.__bsOrientationLock={tryLock:tryLock,update:update,isLandscape:isLandscape};' +
+    'window.addEventListener("orientationchange",update);' +
+    'window.addEventListener("resize",update);' +
+    'document.addEventListener("visibilitychange",update);' +
+    'document.addEventListener("click",tryLock,{passive:true});' +
+    'document.addEventListener("touchstart",tryLock,{passive:true});' +
+    'update();' +
+    '})();'
   );
 end;
 
@@ -735,6 +790,7 @@ begin
     FSettings.Free;
   end;
   RegisterPWA(ICON_PATH);
+  RegisterOrientationLock(pnlScan.JSName);
 end;
 
 procedure TMainmForm.UnimFormAfterShow(Sender: TObject);
@@ -759,6 +815,11 @@ begin
     else
     begin
       FastShowInitScanner;
+    end;
+    if FileExists(uJsGUI.ScannerProfileFilePath) then
+    begin
+      ApplyScannerProfileConfig(pnlScan, LoadScannerProfileFromFile, False);
+      Toast('Глобальный конфиг сканнера <b> успешно загружен');
     end
   end
   else if EventName = 'resetChain' then

@@ -224,7 +224,9 @@ object UniServerModule: TUniServerModule
       'f2'#39');'
     '}')
   CustomMeta.Strings = (
-    '')
+    '<meta name="mobile-web-app-capable" content="yes">'
+    '<meta name="apple-mobile-web-app-capable" content="yes">'
+    '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">')
   SSL.Enabled = True
   SSL.SSLOptions.RootCertFile = 'root.pem'
   SSL.SSLOptions.CertFile = 'cert.pem'
