@@ -542,7 +542,7 @@ procedure ShowCustomScanner(
   ACurrentRollId: string = '';
   AScanAreaScale: Double = 0.50);
 var
-  LHTML, LJS, LCID, LSScanAreaScale, LSvgUser, LSvgEquipBig, LSvgExit, LSvgScan, LSvgRollBig: string;
+  LHTML, LJS, LCID, LSScanAreaScale, LSvgUser, LSvgEquipBig, LSvgExit, LSvgScan, LSvgRollBig, LSettingsPanel: string;
   LIsLogin: Boolean;
   LScanAreaScale: Double;
   LUserHeader, LScannerFlex, LButtonsHTML, LProcessPanel: string;
@@ -576,6 +576,98 @@ begin
   LButtonsHTML :=
     '<div id="' + LCID + '_btn_scan" style="width:90px; height:90px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.4); ' +
     'border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 0 40px rgba(0,0,0,0.5);">' + LSvgScan + '</div>';
+
+  LSettingsPanel :=
+    '<div id="' + LCID + '_scan_settings" style="display:none; position:fixed; inset:0; z-index:10000; ' +
+    'background:rgba(0,0,0,0.88); flex-direction:column; font-family:' + AFontName + '; color:#fff; overflow:hidden;">' +
+
+    // шапка
+    '  <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; ' +
+    'border-bottom:1px solid rgba(255,255,255,0.12); flex-shrink:0;">' +
+    '    <div style="font-size:18px; font-weight:700;">Настройки сканера</div>' +
+    '    <button type="button" id="' + LCID + '_ss_close" ' +
+    'style="width:36px; height:36px; border:none; border-radius:50%; background:rgba(255,255,255,0.12); color:#fff; font-size:22px; cursor:pointer;">&times;</button>' +
+    '  </div>' +
+
+    // тело
+    '  <div style="flex:1; overflow-y:auto; padding:16px 20px 24px; -webkit-overflow-scrolling:touch;">' +
+    '    <div style="font-size:12px; color:#94a3b8; margin-bottom:16px; line-height:1.5;">' +
+    'Если сканер не работает на iPhone — попробуйте сменить камеру, FPS, соотношение сторон или отключить qrbox (полный кадр).</div>' +
+    '    <div style="display:flex; flex-direction:column; gap:14px;">' +
+
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">Камера (facingMode)' +
+    '        <select id="' + LCID + '_ss_facing" style="padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:#1e293b; color:#fff; font-size:14px;">' +
+    '          <option value="environment">Задняя (environment)</option>' +
+    '          <option value="user">Передняя (user)</option>' +
+    '          <option value="exact">Конкретная камера (ID)</option>' +
+    '        </select></label>' +
+
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">ID камеры' +
+    '        <select id="' + LCID + '_ss_camera" style="padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:#1e293b; color:#fff; font-size:14px;">' +
+    '          <option value="">— загрузка —</option></select></label>' +
+
+    '      <button type="button" id="' + LCID + '_ss_refresh_cam" ' +
+    'style="padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.08); color:#fff; font-size:13px; cursor:pointer;">' +
+    'Обновить список камер</button>' +
+
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">FPS (кадров/с): <span id="' + LCID + '_ss_fps_val">10</span>' +
+    '        <input type="range" id="' + LCID + '_ss_fps" min="1" max="30" value="10" style="width:100%;"></label>' +
+
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">Область сканирования (%%): <span id="' + LCID + '_ss_qrbox_val">50</span>' +
+    '        <input type="range" id="' + LCID + '_ss_qrbox" min="20" max="95" value="50" style="width:100%;"></label>' +
+
+    '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;">' +
+    '        <input type="checkbox" id="' + LCID + '_ss_fullframe"> Сканировать весь кадр (без qrbox)</label>' +
+
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">Соотношение сторон видео' +
+    '        <select id="' + LCID + '_ss_aspect" style="padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:#1e293b; color:#fff; font-size:14px;">' +
+    '          <option value="0">Авто (не задавать)</option>' +
+    '          <option value="1">1:1</option>' +
+    '          <option value="1.333">4:3</option>' +
+    '          <option value="1.777">16:9</option>' +
+    '        </select></label>' +
+
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">Антидребезг (мс): <span id="' + LCID + '_ss_debounce_val">2500</span>' +
+    '        <input type="range" id="' + LCID + '_ss_debounce" min="500" max="5000" step="100" value="2500" style="width:100%;"></label>' +
+
+    '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;">' +
+    '        <input type="checkbox" id="' + LCID + '_ss_disable_flip"> disableFlip (не сканировать зеркально)</label>' +
+    '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;">' +
+    '        <input type="checkbox" id="' + LCID + '_ss_barcode_detector"> useBarCodeDetectorIfSupported (эксп.)</label>' +
+    '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;">' +
+    '        <input type="checkbox" id="' + LCID + '_ss_verbose"> Подробный лог в консоль</label>' +
+    '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;">' +
+    '        <input type="checkbox" id="' + LCID + '_ss_autostart"> Автозапуск камеры при открытии</label>' +
+
+    '      <div style="font-size:13px; font-weight:600; margin-top:4px;">Форматы кодов</div>' +
+    '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;"><input type="checkbox" id="' + LCID + '_ss_fmt_qr" checked> QR Code</label>' +
+    '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;"><input type="checkbox" id="' + LCID + '_ss_fmt_c128"> CODE_128</label>' +
+    '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;"><input type="checkbox" id="' + LCID + '_ss_fmt_ean13"> EAN_13</label>' +
+    '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;"><input type="checkbox" id="' + LCID + '_ss_fmt_c39"> CODE_39</label>' +
+    '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;"><input type="checkbox" id="' + LCID + '_ss_fmt_datamatrix"> DATA_MATRIX</label>' +
+
+    '      <div style="display:flex; gap:10px;">' +
+    '        <label style="flex:1; display:flex; flex-direction:column; gap:6px; font-size:13px;">Ширина видео (0=авто)' +
+    '          <input type="number" id="' + LCID + '_ss_vw" min="0" max="4096" value="0" ' +
+    'style="padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:#1e293b; color:#fff;"></label>' +
+    '        <label style="flex:1; display:flex; flex-direction:column; gap:6px; font-size:13px;">Высота видео (0=авто)' +
+    '          <input type="number" id="' + LCID + '_ss_vh" min="0" max="4096" value="0" ' +
+    'style="padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:#1e293b; color:#fff;"></label>' +
+    '      </div>' +
+
+    '      <div id="' + LCID + '_ss_status" style="font-size:12px; color:#fbbf24; min-height:18px; word-break:break-word;"></div>' +
+    '    </div>' +
+    '  </div>' +
+
+    // подвал
+    '  <div style="display:flex; gap:10px; padding:16px 20px calc(16px + env(safe-area-inset-bottom)); ' +
+    'border-top:1px solid rgba(255,255,255,0.12); flex-shrink:0;">' +
+    '    <button type="button" id="' + LCID + '_ss_reset" ' +
+    'style="flex:1; padding:14px; border-radius:14px; border:1px solid rgba(255,255,255,0.2); background:transparent; color:#fff; font-weight:600; cursor:pointer;">Сброс</button>' +
+    '    <button type="button" id="' + LCID + '_ss_apply" ' +
+    'style="flex:2; padding:14px; border-radius:14px; border:none; background:#3b82f6; color:#fff; font-weight:700; cursor:pointer;">Применить</button>' +
+    '  </div>' +
+    '</div>';
 
   // 2. Панель процесса (под сканнером, увеличенные шрифты и иконки)
   LProcessPanel :=
@@ -732,7 +824,7 @@ begin
     '           ontouchend="clearTimeout(this.lp);">' +
     '      </div>' +
     '      <div id="' + LCID + '_scan_area"></div>' +
-    '      <div id="' + LCID + '_cam_stub" onclick="ajaxRequest(' + APanel.JSName + ', ''camStubClick'', [])" style="position:absolute; top:0; left:0; width:100%; height:100%; background:#1e293b; border-radius:26px; display:none; align-items:center; justify-content:center; z-index:9;">' +
+    '      <div id="' + LCID + '_cam_stub" style="position:absolute; top:0; left:0; width:100%; height:100%; background:#1e293b; border-radius:26px; display:none; align-items:center; justify-content:center; z-index:9; cursor:pointer; -webkit-user-select:none; user-select:none;">' +
     '        <div style="color:#94a3b8; font-family:fop; font-size:48px;">&#xf029</div>' +
     '      </div>' +
     '      <div id="' + LCID + '_overlay" style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); border-radius:26px; display:flex; align-items:center; justify-content:center; z-index:10; opacity:0; pointer-events:none;">' +
@@ -748,6 +840,7 @@ begin
   '  </div>' +
 
   '  <audio id="' + LCID + '_beep" src="/files/src-media/scan_beep.mp3" preload="auto"></audio>' +
+  LSettingsPanel +
   '</div>';
 
 
@@ -785,7 +878,7 @@ begin
   LJS := Format(
     'var runScanner=function(){ var p=window["%0:s"]; if(!p)return; ' +
     'if(typeof Html5Qrcode==="undefined"){ var s=document.createElement("script"); s.src="/files/src-js/html5-qrcode.min.js"; s.onload=runScanner; document.head.appendChild(s); return; } ' +
-    'if(p._scanner){try{p._scanner.stop();}catch(e){}} p._scanner=new Html5Qrcode("%0:s_view"); ' +
+    'if(p._scanner){try{p._scanner.stop();}catch(e){}} p._scanner=null; p._scannerCfg=null; ' +
     'p._lastCode=""; p._lastTime=0; p._camActive=true; ' +
     'p._nodes = { eq: false, roll: false }; ' +
 
@@ -1056,20 +1149,225 @@ begin
    // --- Салют(конец) ----
 
 
-    // --- СКАНЕР ---
+    // --- СКАНЕР: настройки (LocalStorage) ---
+    'var SCAN_SETTINGS_KEY="badsticker_scanner_settings"; ' +
+
+    // defaults / load / save
+    'p._defaultScanSettings=function(){ ' +
+    '  return { facingMode:"environment", cameraId:"", fps:10, qrboxScale:%1:s, fullFrame:false, ' +
+    '    aspectMode:"1", disableFlip:false, useBarCodeDetector:false, debounceMs:2500, autoStartCamera:false, ' +
+    '    verbose:false, videoWidth:0, videoHeight:0, ' +
+    '    formats:{qr:true,c128:false,ean13:false,c39:false,dm:false} }; ' +
+    '}; ' +
+    'p._loadScanSettings=function(){ ' +
+    '  var d=p._defaultScanSettings(); ' +
+    '  try{ ' +
+    '    var s=localStorage.getItem(SCAN_SETTINGS_KEY); ' +
+    '    if(s){ var o=JSON.parse(s); for(var k in o){ if(o.hasOwnProperty(k)) d[k]=o[k]; } ' +
+    '      if(o.formats) d.formats=Object.assign(d.formats,o.formats); ' +
+    '    } ' +
+    '  }catch(e){} return d; ' +
+    '}; ' +
+    'p._saveScanSettings=function(s){ try{ localStorage.setItem(SCAN_SETTINGS_KEY, JSON.stringify(s)); }catch(e){} }; ' +
+    'p._scanSettings=p._loadScanSettings(); ' +
+
+    // визуальная рамка сканирования
+    'p._updateScanAreaVisual=function(){ ' +
+    '  var el=document.getElementById("%0:s_scan_area"); if(!el) return; ' +
+    '  var sc=p._scanSettings.fullFrame ? 0.95 : p._scanSettings.qrboxScale; ' +
+    '  el.style.width=el.style.height="calc(100%% * "+sc+")"; ' +
+    '}; ' +
+
+    // html5-qrcode: форматы и инстанс
+    'p._getFormatsList=function(){ ' +
+    '  var f=[], m=p._scanSettings.formats||{}; ' +
+    '  if(typeof Html5QrcodeSupportedFormats!=="undefined"){ ' +
+    '    if(m.qr!==false) f.push(Html5QrcodeSupportedFormats.QR_CODE); ' +
+    '    if(m.c128) f.push(Html5QrcodeSupportedFormats.CODE_128); ' +
+    '    if(m.ean13) f.push(Html5QrcodeSupportedFormats.EAN_13); ' +
+    '    if(m.c39) f.push(Html5QrcodeSupportedFormats.CODE_39); ' +
+    '    if(m.dm) f.push(Html5QrcodeSupportedFormats.DATA_MATRIX); ' +
+    '    if(!f.length) f.push(Html5QrcodeSupportedFormats.QR_CODE); ' +
+    '  } return f; ' +
+    '}; ' +
+    'p._ensureScanner=function(){ ' +
+    '  var ctor={}, fmts=p._getFormatsList(); ' +
+    '  if(fmts.length) ctor.formatsToSupport=fmts; ' +
+    '  if(p._scanSettings.verbose) ctor.verbose=true; ' +
+    '  if(p._scanSettings.useBarCodeDetector) ctor.experimentalFeatures={useBarCodeDetectorIfSupported:true}; ' +
+    '  var needRecreate=!p._scanner; ' +
+    '  if(p._scanner && p._scannerCfg) needRecreate=needRecreate||JSON.stringify(p._scannerCfg)!==JSON.stringify(ctor); ' +
+    '  if(needRecreate){ ' +
+    '    if(p._scanner){ try{p._scanner.stop();}catch(e){} try{p._scanner.clear();}catch(e){} } ' +
+    '    p._scanner=new Html5Qrcode("%0:s_view", ctor); p._scannerCfg=ctor; ' +
+    '  } ' +
+    '}; ' +
+
+    // конфиг камеры и сканирования
+    'p._getCameraConfig=function(){ ' +
+    '  var s=p._scanSettings; ' +
+    '  if(s.facingMode==="exact" && s.cameraId) return s.cameraId; ' +
+    '  if(s.facingMode==="exact") return {facingMode:"environment"}; ' +
+    '  return {facingMode:s.facingMode||"environment"}; ' +
+    '}; ' +
+    'p._buildScanConfig=function(){ ' +
+    '  var s=p._scanSettings, cfg={fps:parseInt(s.fps,10)||10, disableFlip:!!s.disableFlip}; ' +
+    '  if(s.aspectMode && s.aspectMode!=="0") cfg.aspectRatio=parseFloat(s.aspectMode)||1; ' +
+    '  if(!s.fullFrame){ ' +
+    '    cfg.qrbox=function(vw,vh){ ' +
+    '      var sc=parseFloat(s.qrboxScale)||%1:s; ' +
+    '      var edge=Math.floor(Math.min(vw,vh)*sc); ' +
+    '      return {width:edge,height:edge}; ' +
+    '    }; ' +
+    '  } ' +
+    '  if(s.videoWidth>0 || s.videoHeight>0){ ' +
+    '    cfg.videoConstraints={}; ' +
+    '    if(s.videoWidth>0) cfg.videoConstraints.width=s.videoWidth; ' +
+    '    if(s.videoHeight>0) cfg.videoConstraints.height=s.videoHeight; ' +
+    '    if(s.facingMode && s.facingMode!=="exact") cfg.videoConstraints.facingMode=s.facingMode; ' +
+    '  } ' +
+    '  return cfg; ' +
+    '}; ' +
+    'p._setScanStatus=function(msg){ ' +
+    '  var el=document.getElementById("%0:s_ss_status"); if(el) el.textContent=msg||""; ' +
+    '}; ' +
+
+    // UI панели настроек
+    'p._refreshCameraList=function(){ ' +
+    '  var sel=document.getElementById("%0:s_ss_camera"); if(!sel) return; ' +
+    '  sel.innerHTML=''<option value="">— выберите —</option>''; ' +
+    '  if(typeof Html5Qrcode==="undefined") return; ' +
+    '  Html5Qrcode.getCameras().then(function(cams){ ' +
+    '    cams.forEach(function(c){ ' +
+    '      var o=document.createElement("option"); o.value=c.id; o.textContent=(c.label||c.id); ' +
+    '      if(p._scanSettings.cameraId===c.id) o.selected=true; sel.appendChild(o); ' +
+    '    }); ' +
+    '  }).catch(function(err){ p._setScanStatus("Камеры: "+(err&&err.message?err.message:err)); }); ' +
+    '}; ' +
+    'p._fillSettingsForm=function(){ ' +
+    '  var s=p._scanSettings; ' +
+    '  var setVal=function(id,v){ var el=document.getElementById("%0:s_ss_"+id); if(el) el.value=v; }; ' +
+    '  var setChk=function(id,v){ var el=document.getElementById("%0:s_ss_"+id); if(el) el.checked=!!v; }; ' +
+    '  setVal("facing", s.facingMode||"environment"); ' +
+    '  setVal("fps", s.fps||10); ' +
+    '  setVal("qrbox", Math.round((s.qrboxScale||%1:s)*100)); ' +
+    '  setVal("aspect", s.aspectMode||"1"); ' +
+    '  setVal("debounce", s.debounceMs||2500); ' +
+    '  setVal("vw", s.videoWidth||0); setVal("vh", s.videoHeight||0); ' +
+    '  setChk("fullframe", s.fullFrame); setChk("disable_flip", s.disableFlip); ' +
+    '  setChk("barcode_detector", s.useBarCodeDetector); setChk("verbose", s.verbose); ' +
+    '  setChk("autostart", s.autoStartCamera); ' +
+    '  var fm=s.formats||{}; ' +
+    '  setChk("fmt_qr", fm.qr!==false); setChk("fmt_c128", !!fm.c128); setChk("fmt_ean13", !!fm.ean13); ' +
+    '  setChk("fmt_c39", !!fm.c39); setChk("fmt_datamatrix", !!fm.dm); ' +
+    '  document.getElementById("%0:s_ss_fps_val").textContent=s.fps||10; ' +
+    '  document.getElementById("%0:s_ss_qrbox_val").textContent=Math.round((s.qrboxScale||%1:s)*100); ' +
+    '  document.getElementById("%0:s_ss_debounce_val").textContent=s.debounceMs||2500; ' +
+    '  p._refreshCameraList(); ' +
+    '}; ' +
+    'p._readSettingsForm=function(){ ' +
+    '  var g=function(id){ return document.getElementById("%0:s_ss_"+id); }; ' +
+    '  var s=p._scanSettings; ' +
+    '  s.facingMode=g("facing").value; s.cameraId=g("camera").value; ' +
+    '  s.fps=parseInt(g("fps").value,10)||10; ' +
+    '  s.qrboxScale=(parseInt(g("qrbox").value,10)||50)/100; ' +
+    '  s.fullFrame=g("fullframe").checked; s.aspectMode=g("aspect").value; ' +
+    '  s.debounceMs=parseInt(g("debounce").value,10)||2500; ' +
+    '  s.disableFlip=g("disable_flip").checked; s.useBarCodeDetector=g("barcode_detector").checked; ' +
+    '  s.verbose=g("verbose").checked; s.autoStartCamera=g("autostart").checked; ' +
+    '  s.videoWidth=parseInt(g("vw").value,10)||0; s.videoHeight=parseInt(g("vh").value,10)||0; ' +
+    '  s.formats={qr:g("fmt_qr").checked,c128:g("fmt_c128").checked,ean13:g("fmt_ean13").checked, ' +
+    '    c39:g("fmt_c39").checked,dm:g("fmt_datamatrix").checked}; ' +
+    '  p._saveScanSettings(s); return s; ' +
+    '}; ' +
+    'p._openScanSettings=function(e){ ' +
+    '  if(e){ e.stopPropagation(); e.preventDefault(); } ' +
+    '  p._fillSettingsForm(); ' +
+    '  var pan=document.getElementById("%0:s_scan_settings"); if(pan) pan.style.display="flex"; ' +
+    '}; ' +
+    'p._closeScanSettings=function(){ ' +
+    '  var pan=document.getElementById("%0:s_scan_settings"); if(pan) pan.style.display="none"; ' +
+    '}; ' +
+    'p._applyScanSettings=function(restart){ ' +
+    '  p._readSettingsForm(); p._updateScanAreaVisual(); p._ensureScanner(); ' +
+    '  if(restart && p._camActive){ ' +
+    '    try{ ' +
+    '      p._scanner.stop().then(function(){ p._startScan(p._scanMode||"scan"); }) ' +
+    '        .catch(function(){ p._startScan(p._scanMode||"scan"); }); ' +
+    '    }catch(e){ p._startScan(p._scanMode||"scan"); } ' +
+    '  } ' +
+    '  p._setScanStatus("Настройки сохранены"); ' +
+    '  setTimeout(function(){ p._setScanStatus(""); }, 2000); ' +
+    '  p._closeScanSettings(); ' +
+    '}; ' +
+    'p._bindScanSettingsUI=function(){ ' +
+    // короткий тап — camStubClick, удержание 11 сек — настройки
+    '  var stub=document.getElementById("%0:s_cam_stub"); ' +
+    '  if(stub){ ' +
+    '    var stubTimer, stubLong=false, stubActive=false; ' +
+    '    var stubPressStart=function(){ ' +
+    '      if(stubActive) return; stubActive=true; stubLong=false; ' +
+    '      stubTimer=setTimeout(function(){ stubLong=true; stubActive=false; p._openScanSettings(); }, 11000); ' +
+    '    }; ' +
+    '    var stubPressCancel=function(){ clearTimeout(stubTimer); stubActive=false; stubLong=false; }; ' +
+    '    var stubPressEnd=function(){ ' +
+    '      clearTimeout(stubTimer); ' +
+    '      if(stubActive && !stubLong) ajaxRequest(p, "camStubClick", []); ' +
+    '      stubActive=false; stubLong=false; ' +
+    '    }; ' +
+    '    stub.addEventListener("mousedown", stubPressStart); ' +
+    '    stub.addEventListener("mouseup", stubPressEnd); ' +
+    '    stub.addEventListener("mouseleave", stubPressCancel); ' +
+    '    stub.addEventListener("touchstart", stubPressStart, {passive:true}); ' +
+    '    stub.addEventListener("touchend", stubPressEnd); ' +
+    '    stub.addEventListener("touchcancel", stubPressCancel); ' +
+    '  } ' +
+    '  ["fps","qrbox","debounce"].forEach(function(id){ ' +
+    '    var el=document.getElementById("%0:s_ss_"+id); if(!el) return; ' +
+    '    el.oninput=function(){ ' +
+    '      var lbl=document.getElementById("%0:s_ss_"+id+"_val"); if(lbl) lbl.textContent=el.value; ' +
+    '    }; ' +
+    '  }); ' +
+    '  var closeBtn=document.getElementById("%0:s_ss_close"); ' +
+    '  if(closeBtn) closeBtn.onclick=function(){ p._closeScanSettings(); }; ' +
+    '  var applyBtn=document.getElementById("%0:s_ss_apply"); ' +
+    '  if(applyBtn) applyBtn.onclick=function(){ p._applyScanSettings(true); }; ' +
+    '  var resetBtn=document.getElementById("%0:s_ss_reset"); ' +
+    '  if(resetBtn) resetBtn.onclick=function(){ ' +
+    '    p._scanSettings=p._defaultScanSettings(); p._saveScanSettings(p._scanSettings); ' +
+    '    p._fillSettingsForm(); p._setScanStatus("Сброшено к умолчанию"); ' +
+    '  }; ' +
+    '  var refBtn=document.getElementById("%0:s_ss_refresh_cam"); ' +
+    '  if(refBtn) refBtn.onclick=function(){ p._refreshCameraList(); }; ' +
+    '}; ' +
+
+    // --- СКАНЕР: запуск ---
     'p._startScan=function(m){ ' +
     '  if(!p._camActive) return; ' +
-    '  var view=document.getElementById("%0:s_view"); ' +
-    '  var edge=Math.floor(Math.min(view.offsetWidth, view.offsetHeight)*%1:s); ' +
-    '  p._scanner.start({facingMode:"environment"}, {fps:5, qrbox:{width:edge,height:edge}}, ' +
-    '  function(t){ ' +
-    '    var now=Date.now(); if(t===p._lastCode && (now-p._lastTime < 2500)) return; ' +
-    '    p._lastCode=t; p._lastTime=now; ' +
-    '    try{document.getElementById("%0:s_beep").play();}catch(e){} ' +
-    '    ajaxRequest(p,"scanSuccess",["code="+t,"mode=%2:s","submode="+m]); ' +
-    '  }, function(){}).catch(function(){}); ' +
+    '  p._scanMode=m; ' +
+    '  p._ensureScanner(); ' +
+    '  var cfg=p._buildScanConfig(); ' +
+    '  var cam=p._getCameraConfig(); ' +
+    '  var deb=p._scanSettings.debounceMs||2500; ' +
+    '  p._scanner.start(cam, cfg, ' +
+    '    function(t){ ' +
+    '      var now=Date.now(); ' +
+    '      if(t===p._lastCode && (now-p._lastTime < deb)) return; ' +
+    '      p._lastCode=t; p._lastTime=now; ' +
+    '      try{ document.getElementById("%0:s_beep").play(); }catch(e){} ' +
+    '      ajaxRequest(p,"scanSuccess",["code="+t,"mode=%2:s","submode="+m]); ' +
+    '    }, ' +
+    '    function(err){ if(p._scanSettings.verbose) console.warn("scan err", err); } ' +
+    '  ).catch(function(err){ ' +
+    '    p._setScanStatus("Ошибка камеры: "+(err&&err.message?err.message:err)); ' +
+    '    if(p._scanSettings.verbose) console.error(err); ' +
+    '  }); ' +
     '}; ' +
-    'p._startScan("scan"); p.toggleCam(false); }; runScanner();',
+    'p._updateScanAreaVisual(); ' +
+    'p._bindScanSettingsUI(); ' +
+    'p._startScan("scan"); ' +
+    'p.toggleCam(!!p._scanSettings.autoStartCamera); ' +
+    '}; runScanner();',
     [LCID, LSScanAreaScale, AMode]);
 
   UniSession.AddJS(LJS);
