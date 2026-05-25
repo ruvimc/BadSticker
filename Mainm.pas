@@ -759,6 +759,11 @@ begin
     else
     begin
       FastShowInitScanner;
+    end;
+    if FileExists(uJsGUI.ScannerProfileFilePath) then
+    begin
+      ApplyScannerProfileConfig(pnlScan, LoadScannerProfileFromFile, False);
+      Toast('Глобальный конфиг сканнера <b> успешно загружен');
     end
   end
   else if EventName = 'resetChain' then
