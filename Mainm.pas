@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, StrUtils,
-  System.JSON, Math, System.IOUtils,
+  System.JSON, Math, System.IOUtils, System.NetEncoding,
   Controls, Forms, uniGUITypes, uniGUIAbstractClasses, DBAccess, MyAccess,
   uniGUIClasses, uniGUImClasses, uniGUIRegClasses, uniGUIForm, uniGUImForm,
   uniGUImJSForm,
@@ -74,6 +74,7 @@ type
     procedure imgBgClick(Sender: TObject);
     procedure tmrResetCounterTimer(Sender: TObject);
     procedure timerInitTimer(Sender: TObject);
+    procedure UnimFormAfterShow(Sender: TObject);
   private
     FSettings: TSettings;
     FConnection: TMyConnection;
@@ -357,19 +358,25 @@ end;
 
 procedure TMainmForm.CheckIsLocalAccess;
 var
-  LImagePath: string;
+  LPingPath: string;
 begin
-  LImagePath := GetSettingValue('PingPath', 'settings.set');
-    UniSession.AddJS(
-      'var img = new Image(); ' +
-      'img.onload = function() { ' +
-      '  ajaxRequest(' + Self.JSInterface.JSName + ', ''pingStatus'', [''status=OK'']); ' +
-      '}; ' +
-      'img.onerror = function() { ' +
-      '  ajaxRequest(' + Self.JSInterface.JSName + ', ''pingStatus'', [''status=ERR'']); ' +
-      '}; ' +
-      'img.src = "' + StringReplace(LImagePath, '\', '/', [rfReplaceAll]) + '?t=' + IntToStr(GetTickCount) + '";'
-    );
+  LPingPath := GetSettingValue('PingPath', 'settings.set');
+  if LPingPath.Equals('dbg') then
+  begin
+    IsOutWork := False;
+    imgBg.Visible := False;
+    Exit;
+  end;
+  IsOutWork := not LPingPath.Contains(UniSession.RemoteIP);
+  if IsOutWork then
+  begin
+    Toast('Доступ вне работы <br> <br> ЗАПРЕЩЕН <br> <br> Не балуйся 🤡', alClient);
+    MainmForm.Color := clBlack;
+    pnlScan.Visible := False;
+    DestroyWorkTracker(pnlScan);
+  end
+  else
+    FadeOutAndDestroy(imgBg, 2000);
 end;
 
 function MainmForm: TMainmForm;
@@ -728,26 +735,16 @@ begin
     FSettings.Free;
   end;
   RegisterPWA(ICON_PATH);
+end;
+
+procedure TMainmForm.UnimFormAfterShow(Sender: TObject);
+begin
   CheckIsLocalAccess;
 end;
 
 procedure TMainmForm.UnimFormAjaxEvent(Sender: TComponent; EventName: string;
   Params: TUniStrings);
 begin
-  if EventName = 'pingStatus' then
-  begin
-    if Params['status'].AsString.Equals('ERR') then
-    begin
-      Toast('Доступ вне работы <br> <br> ЗАПРЕЩЕН <br> <br> Не балуйся 🤡', alClient);
-      MainmForm.Color := clBlack;
-      pnlScan.Visible := False;
-      DestroyWorkTracker(pnlScan);
-      IsOutWork := True;
-    end
-    else
-      FadeOutAndDestroy(imgBg, 2000);
-  end
-  else
   if EventName = 'FormReady' then
   begin
     FQRUserId := Cookie('_username');
@@ -762,7 +759,7 @@ begin
     else
     begin
       FastShowInitScanner;
-    end;
+    end
   end
   else if EventName = 'resetChain' then
     ResetChainState;
@@ -815,6 +812,7 @@ end;
 
 function TMainmForm.GetEquipName(AEqipId: string): string;
 begin
+  qryEquipName.Close;
   qryEquipName.ParamByName('eqId').AsString := AEqipId;
   qryEquipName.Open;
   Result := qryEquipName.FieldByName('eqname').AsString;
@@ -1156,6 +1154,24 @@ begin
   begin
     LoadDataToInfoTable(FBlockInfoJson);
     ShowAddInfoPanel;
+  end
+  else
+  if EventName = 'saveScannerProfile' then
+  begin
+    SaveScannerProfileConfig(TNetEncoding.URL.Decode(Params['config'].Value));
+  end
+  else
+  if EventName = 'applyGlobalScannerProfile' then
+  begin
+    if FileExists(uJsGUI.ScannerProfileFilePath) then
+    begin
+      ApplyScannerProfileConfig(pnlScan, LoadScannerProfileFromFile, False);
+      Toast('Глобальный конфиг сканнера <b> успешно загружен');
+    end
+    else
+    begin
+      Toast('Файл конфига не найден');
+    end;
   end;
 end;
 

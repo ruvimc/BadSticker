@@ -9,6 +9,7 @@ object MainmForm: TMainmForm
   TitleButtons = <>
   OnAjaxEvent = UnimFormAjaxEvent
   OnCreate = UnimFormCreate
+  OnAfterShow = UnimFormAfterShow
   PixelsPerInch = 96
   TextHeight = 13
   ScrollPosition = 0
