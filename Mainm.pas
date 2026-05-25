@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, StrUtils,
-  System.JSON, Math, System.IOUtils,
+  System.JSON, Math, System.IOUtils, System.NetEncoding,
   Controls, Forms, uniGUITypes, uniGUIAbstractClasses, DBAccess, MyAccess,
   uniGUIClasses, uniGUImClasses, uniGUIRegClasses, uniGUIForm, uniGUImForm,
   uniGUImJSForm,
@@ -759,7 +759,7 @@ begin
     else
     begin
       FastShowInitScanner;
-    end;
+    end
   end
   else if EventName = 'resetChain' then
     ResetChainState;
@@ -812,6 +812,7 @@ end;
 
 function TMainmForm.GetEquipName(AEqipId: string): string;
 begin
+  qryEquipName.Close;
   qryEquipName.ParamByName('eqId').AsString := AEqipId;
   qryEquipName.Open;
   Result := qryEquipName.FieldByName('eqname').AsString;
@@ -1153,6 +1154,24 @@ begin
   begin
     LoadDataToInfoTable(FBlockInfoJson);
     ShowAddInfoPanel;
+  end
+  else
+  if EventName = 'saveScannerProfile' then
+  begin
+    SaveScannerProfileConfig(TNetEncoding.URL.Decode(Params['config'].Value));
+  end
+  else
+  if EventName = 'applyGlobalScannerProfile' then
+  begin
+    if FileExists(uJsGUI.ScannerProfileFilePath) then
+    begin
+      ApplyScannerProfileConfig(pnlScan, LoadScannerProfileFromFile, False);
+      Toast('Глобальный конфиг сканнера <b> успешно загружен');
+    end
+    else
+    begin
+      Toast('Файл конфига не найден');
+    end;
   end;
 end;
 
