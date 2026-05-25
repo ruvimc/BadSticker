@@ -364,6 +364,7 @@ begin
   if LPingPath.Equals('dbg') then
   begin
     IsOutWork := False;
+    imgBg.Visible := False;
     Exit;
   end;
   IsOutWork := not LPingPath.Contains(UniSession.RemoteIP);
