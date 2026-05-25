@@ -610,8 +610,9 @@ begin
     'style="padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.08); color:#fff; font-size:13px; cursor:pointer;">' +
     'Обновить список камер</button>' +
 
-    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">FPS (кадров/с): <span id="' + LCID + '_ss_fps_val">10</span>' +
-    '        <input type="range" id="' + LCID + '_ss_fps" min="1" max="30" value="10" style="width:100%;"></label>' +
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">FPS сканирования: <span id="' + LCID + '_ss_fps_val">10</span>' +
+    '        <input type="range" id="' + LCID + '_ss_fps" min="1" max="60" value="10" style="width:100%;"></label>' +
+    '      <div style="font-size:11px; color:#64748b; margin-top:-8px;">1–30 обычно достаточно; на iPhone можно попробовать 40–60</div>' +
 
     '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">Область сканирования (%%): <span id="' + LCID + '_ss_qrbox_val">50</span>' +
     '        <input type="range" id="' + LCID + '_ss_qrbox" min="20" max="95" value="50" style="width:100%;"></label>' +
@@ -629,6 +630,32 @@ begin
 
     '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">Антидребезг (мс): <span id="' + LCID + '_ss_debounce_val">2500</span>' +
     '        <input type="range" id="' + LCID + '_ss_debounce" min="500" max="5000" step="100" value="2500" style="width:100%;"></label>' +
+
+    '      <div style="font-size:13px; font-weight:600; margin-top:4px;">Изображение камеры</div>' +
+    '      <div style="font-size:11px; color:#64748b; line-height:1.4;">Zoom — оптический (если камера поддерживает). Яркость и контраст — через CSS и аппаратно.</div>' +
+
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">Zoom: <span id="' + LCID + '_ss_zoom_val">1</span>' +
+    '        <input type="range" id="' + LCID + '_ss_zoom" min="1" max="10" step="0.1" value="1" style="width:100%;"></label>' +
+    '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;">' +
+    '        <input type="checkbox" id="' + LCID + '_ss_disable_zoom"> Отключить zoom / автозум камеры</label>' +
+
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">Яркость (%%): <span id="' + LCID + '_ss_brightness_val">100</span>' +
+    '        <input type="range" id="' + LCID + '_ss_brightness" min="50" max="200" step="5" value="100" style="width:100%;"></label>' +
+
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">Контраст (%%): <span id="' + LCID + '_ss_contrast_val">100</span>' +
+    '        <input type="range" id="' + LCID + '_ss_contrast" min="50" max="200" step="5" value="100" style="width:100%;"></label>' +
+
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">Препроцессинг превью' +
+    '        <select id="' + LCID + '_ss_preprocess" style="padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:#1e293b; color:#fff; font-size:14px;">' +
+    '          <option value="off">Выкл (обычное видео)</option>' +
+    '          <option value="contrast">Высокий контраст (CSS)</option>' +
+    '          <option value="bw">Ч/б усиленный (CSS)</option>' +
+    '          <option value="binary">Ч/б бинаризация (canvas)</option>' +
+    '        </select></label>' +
+    '      <div style="font-size:11px; color:#64748b; margin-top:-8px;">Показывает контрастный кадр для наведения на код. Сканер читает исходное видео.</div>' +
+
+    '      <label style="display:flex; flex-direction:column; gap:6px; font-size:13px;">Порог бинаризации: <span id="' + LCID + '_ss_pre_th_val">128</span>' +
+    '        <input type="range" id="' + LCID + '_ss_pre_th" min="60" max="200" step="1" value="128" style="width:100%;"></label>' +
 
     '      <label style="display:flex; align-items:center; gap:10px; font-size:13px;">' +
     '        <input type="checkbox" id="' + LCID + '_ss_disable_flip"> disableFlip (не сканировать зеркально)</label>' +
@@ -894,6 +921,7 @@ begin
     '  } else { ' +
     '    stub.style.display="flex"; ' +
     '    try{ p._scanner.stop(); }catch(e){} ' +
+    '    p._stopPreprocessCanvas(); ' +
     '  }' +
     '}; ' +
 
@@ -1156,7 +1184,8 @@ begin
     'p._defaultScanSettings=function(){ ' +
     '  return { facingMode:"environment", cameraId:"", fps:10, qrboxScale:%1:s, fullFrame:false, ' +
     '    aspectMode:"1", disableFlip:false, useBarCodeDetector:false, debounceMs:2500, autoStartCamera:false, ' +
-    '    verbose:false, videoWidth:0, videoHeight:0, ' +
+    '    verbose:false, videoWidth:0, videoHeight:0, zoom:1, disableZoom:false, brightnessPct:100, contrastPct:100, ' +
+    '    preprocessMode:"off", preprocessThreshold:128, ' +
     '    formats:{qr:true,c128:false,ean13:false,c39:false,dm:false} }; ' +
     '}; ' +
     'p._loadScanSettings=function(){ ' +
@@ -1211,7 +1240,7 @@ begin
     '  return {facingMode:s.facingMode||"environment"}; ' +
     '}; ' +
     'p._buildScanConfig=function(){ ' +
-    '  var s=p._scanSettings, cfg={fps:parseInt(s.fps,10)||10, disableFlip:!!s.disableFlip}; ' +
+    '  var s=p._scanSettings, cfg={fps:Math.min(60,Math.max(1,parseInt(s.fps,10)||10)), disableFlip:!!s.disableFlip}; ' +
     '  if(s.aspectMode && s.aspectMode!=="0") cfg.aspectRatio=parseFloat(s.aspectMode)||1; ' +
     '  if(!s.fullFrame){ ' +
     '    cfg.qrbox=function(vw,vh){ ' +
@@ -1228,6 +1257,142 @@ begin
     '  } ' +
     '  return cfg; ' +
     '}; ' +
+
+    // video track: zoom / brightness / contrast
+    'p._getVideoEl=function(){ ' +
+    '  var view=document.getElementById("%0:s_view"); ' +
+    '  return view ? view.querySelector("video") : null; ' +
+    '}; ' +
+    'p._getVideoTrack=function(){ ' +
+    '  var v=p._getVideoEl(); ' +
+    '  if(!v || !v.srcObject) return null; ' +
+    '  var tr=v.srcObject.getVideoTracks(); ' +
+    '  return tr.length ? tr[0] : null; ' +
+    '}; ' +
+    'p._clamp=function(val, cap){ ' +
+    '  if(!cap || cap.min===undefined) return val; ' +
+    '  var max=(cap.max!==undefined)?cap.max:val; ' +
+    '  return Math.max(cap.min, Math.min(max, val)); ' +
+    '}; ' +
+    'p._pctToCap=function(pct, cap){ ' +
+    '  if(!cap || cap.min===undefined || cap.max===undefined) return null; ' +
+    '  var t=(parseFloat(pct)-50)/150; ' +
+    '  return cap.min + t*(cap.max-cap.min); ' +
+    '}; ' +
+    'p._syncTrackSliders=function(){ ' +
+    '  var s=p._scanSettings, track=p._getVideoTrack(); ' +
+    '  var zEl=document.getElementById("%0:s_ss_zoom"); ' +
+    '  var zLbl=document.getElementById("%0:s_ss_zoom_val"); ' +
+    '  if(!zEl) return; ' +
+    '  var zMin=1, zMax=10, zStep=0.1; ' +
+    '  if(track && track.getCapabilities){ ' +
+    '    var caps=track.getCapabilities(); ' +
+    '    if(caps.zoom){ zMin=caps.zoom.min; zMax=caps.zoom.max; zStep=caps.zoom.step||0.1; } ' +
+    '  } ' +
+    '  zEl.min=zMin; zEl.max=zMax; zEl.step=zStep; ' +
+    '  var zVal=p._clamp(parseFloat(s.zoom)||zMin, {min:zMin,max:zMax}); ' +
+    '  zEl.value=zVal; if(zLbl) zLbl.textContent=parseFloat(zVal).toFixed(1); ' +
+    '  p._updateZoomUi(); ' +
+    '}; ' +
+    'p._updateZoomUi=function(){ ' +
+    '  var off=!!p._scanSettings.disableZoom; ' +
+    '  var zEl=document.getElementById("%0:s_ss_zoom"); ' +
+    '  if(zEl){ zEl.disabled=off; zEl.style.opacity=off?"0.35":"1"; } ' +
+    '}; ' +
+
+    // препроцессинг превью (CSS + canvas бинаризация)
+    'p._buildFilterCss=function(){ ' +
+    '  var s=p._scanSettings, mode=s.preprocessMode||"off"; ' +
+    '  var br=(parseFloat(s.brightnessPct)||100)/100; ' +
+    '  var ct=(parseFloat(s.contrastPct)||100)/100; ' +
+    '  var parts=[]; ' +
+    '  if(mode==="contrast") parts.push("grayscale(1)","contrast(2.4)","brightness(1.08)"); ' +
+    '  else if(mode==="bw") parts.push("grayscale(1)","contrast(4.5)","brightness(1.12)"); ' +
+    '  parts.push("brightness("+br+")","contrast("+ct+")"); ' +
+    '  return parts.join(" "); ' +
+    '}; ' +
+    'p._stopPreprocessCanvas=function(){ ' +
+    '  if(p._preprocessRaf){ cancelAnimationFrame(p._preprocessRaf); p._preprocessRaf=0; } ' +
+    '  var c=document.getElementById("%0:s_preprocess_cv"); if(c) c.remove(); ' +
+    '  var v=p._getVideoEl(); if(v){ v.style.opacity="1"; } ' +
+    '}; ' +
+    'p._preprocessCanvasLoop=function(){ ' +
+    '  var s=p._scanSettings; ' +
+    '  if(!p._camActive || (s.preprocessMode||"off")!=="binary"){ p._stopPreprocessCanvas(); return; } ' +
+    '  var v=p._getVideoEl(), c=document.getElementById("%0:s_preprocess_cv"); ' +
+    '  if(!v || !c){ p._preprocessRaf=0; return; } ' +
+    '  var ctx=c.getContext("2d"); ' +
+    '  var vw=v.videoWidth||0, vh=v.videoHeight||0; ' +
+    '  if(vw>0 && vh>0){ ' +
+    '    var dw=Math.min(vw,640), dh=Math.round(vh*(dw/vw)); ' +
+    '    if(c.width!==dw){ c.width=dw; c.height=dh; } ' +
+    '    ctx.drawImage(v,0,0,dw,dh); ' +
+    '    var img=ctx.getImageData(0,0,dw,dh), d=img.data, th=parseInt(s.preprocessThreshold,10)||128; ' +
+    '    for(var i=0;i<d.length;i+=4){ ' +
+    '      var g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]; ' +
+    '      var bin=g>=th?255:0; d[i]=d[i+1]=d[i+2]=bin; ' +
+    '    } ' +
+    '    ctx.putImageData(img,0,0); ' +
+    '  } ' +
+    '  p._preprocessRaf=requestAnimationFrame(p._preprocessCanvasLoop); ' +
+    '}; ' +
+    'p._startPreprocessCanvas=function(){ ' +
+    '  p._stopPreprocessCanvas(); ' +
+    '  var view=document.getElementById("%0:s_view"), v=p._getVideoEl(); ' +
+    '  if(!view || !v) return; ' +
+    '  var c=document.createElement("canvas"); ' +
+    '  c.id="%0:s_preprocess_cv"; ' +
+    '  c.style.cssText="position:absolute;top:0;left:0;width:100%%;height:100%%;object-fit:cover;z-index:2;pointer-events:none;"; ' +
+    '  if(!view.style.position) view.style.position="relative"; ' +
+    '  view.appendChild(c); ' +
+    '  v.style.opacity="0"; v.style.filter=""; v.style.transform=""; ' +
+    '  p._preprocessCanvasLoop(); ' +
+    '}; ' +
+    'p._applyPreprocess=function(){ ' +
+    '  var s=p._scanSettings, v=p._getVideoEl(); ' +
+    '  if(!v) return; ' +
+    '  var mode=s.preprocessMode||"off"; ' +
+    '  if(mode==="binary"){ p._startPreprocessCanvas(); return; } ' +
+    '  p._stopPreprocessCanvas(); ' +
+    '  p._applyVideoFilters(); ' +
+    '}; ' +
+
+    'p._applyVideoFilters=function(){ ' +
+    '  var v=p._getVideoEl(); if(!v) return; ' +
+    '  var s=p._scanSettings; ' +
+    '  if((s.preprocessMode||"off")==="binary") return; ' +
+    '  v.style.filter=p._buildFilterCss(); ' +
+    '  v.style.transform=""; v.style.transformOrigin=""; ' +
+    '  if(s.disableZoom) return; ' +
+    '  if(!p._trackZoomOk && (parseFloat(s.zoom)||1)>1){ ' +
+    '    v.style.transformOrigin="center center"; ' +
+    '    v.style.transform="scale("+parseFloat(s.zoom)+")"; ' +
+    '  } ' +
+    '}; ' +
+    'p._applyTrackSettings=function(){ ' +
+    '  var s=p._scanSettings, track=p._getVideoTrack(); ' +
+    '  p._trackZoomOk=false; ' +
+    '  p._applyPreprocess(); ' +
+    '  if(!track || !track.applyConstraints) return Promise.resolve(); ' +
+    '  var caps=track.getCapabilities ? track.getCapabilities() : {}; ' +
+    '  var adv={}, flat={}; ' +
+    '  if(!s.disableZoom && caps.zoom && s.zoom){ flat.zoom=p._clamp(parseFloat(s.zoom), caps.zoom); } ' +
+    '  if(caps.brightness && s.brightnessPct){ ' +
+    '    var b=p._pctToCap(s.brightnessPct, caps.brightness); if(b!==null) adv.brightness=b; ' +
+    '  } ' +
+    '  if(caps.contrast && s.contrastPct){ ' +
+    '    var c=p._pctToCap(s.contrastPct, caps.contrast); if(c!==null) adv.contrast=c; ' +
+    '  } ' +
+    '  var pFlat=Object.keys(flat).length ? track.applyConstraints(flat) : Promise.resolve(); ' +
+    '  return pFlat.then(function(){ p._trackZoomOk=!!flat.zoom; p._applyPreprocess(); ' +
+    '    if(!Object.keys(adv).length) return; ' +
+    '    return track.applyConstraints({advanced:[adv]}); ' +
+    '  }).catch(function(err){ ' +
+    '    if(p._scanSettings.verbose) console.warn("track constraints", err); ' +
+    '    p._applyPreprocess(); ' +
+    '  }); ' +
+    '}; ' +
+
     'p._setScanStatus=function(msg){ ' +
     '  var el=document.getElementById("%0:s_ss_status"); if(el) el.textContent=msg||""; ' +
     '}; ' +
@@ -1254,7 +1419,13 @@ begin
     '  setVal("aspect", s.aspectMode||"1"); ' +
     '  setVal("debounce", s.debounceMs||2500); ' +
     '  setVal("vw", s.videoWidth||0); setVal("vh", s.videoHeight||0); ' +
+    '  setVal("brightness", s.brightnessPct||100); ' +
+    '  setVal("contrast", s.contrastPct||100); ' +
+    '  setVal("zoom", s.zoom||1); ' +
+    '  setVal("preprocess", s.preprocessMode||"off"); ' +
+    '  setVal("pre_th", s.preprocessThreshold||128); ' +
     '  setChk("fullframe", s.fullFrame); setChk("disable_flip", s.disableFlip); ' +
+    '  setChk("disable_zoom", s.disableZoom); ' +
     '  setChk("barcode_detector", s.useBarCodeDetector); setChk("verbose", s.verbose); ' +
     '  setChk("autostart", s.autoStartCamera); ' +
     '  var fm=s.formats||{}; ' +
@@ -1263,19 +1434,29 @@ begin
     '  document.getElementById("%0:s_ss_fps_val").textContent=s.fps||10; ' +
     '  document.getElementById("%0:s_ss_qrbox_val").textContent=Math.round((s.qrboxScale||%1:s)*100); ' +
     '  document.getElementById("%0:s_ss_debounce_val").textContent=s.debounceMs||2500; ' +
+    '  document.getElementById("%0:s_ss_brightness_val").textContent=s.brightnessPct||100; ' +
+    '  document.getElementById("%0:s_ss_contrast_val").textContent=s.contrastPct||100; ' +
+    '  document.getElementById("%0:s_ss_pre_th_val").textContent=s.preprocessThreshold||128; ' +
+    '  p._syncTrackSliders(); ' +
     '  p._refreshCameraList(); ' +
     '}; ' +
     'p._readSettingsForm=function(){ ' +
     '  var g=function(id){ return document.getElementById("%0:s_ss_"+id); }; ' +
     '  var s=p._scanSettings; ' +
     '  s.facingMode=g("facing").value; s.cameraId=g("camera").value; ' +
-    '  s.fps=parseInt(g("fps").value,10)||10; ' +
+    '  s.fps=Math.min(60,Math.max(1,parseInt(g("fps").value,10)||10)); ' +
     '  s.qrboxScale=(parseInt(g("qrbox").value,10)||50)/100; ' +
     '  s.fullFrame=g("fullframe").checked; s.aspectMode=g("aspect").value; ' +
     '  s.debounceMs=parseInt(g("debounce").value,10)||2500; ' +
-    '  s.disableFlip=g("disable_flip").checked; s.useBarCodeDetector=g("barcode_detector").checked; ' +
+    '  s.disableFlip=g("disable_flip").checked; s.disableZoom=g("disable_zoom").checked; ' +
+    '  s.useBarCodeDetector=g("barcode_detector").checked; ' +
     '  s.verbose=g("verbose").checked; s.autoStartCamera=g("autostart").checked; ' +
     '  s.videoWidth=parseInt(g("vw").value,10)||0; s.videoHeight=parseInt(g("vh").value,10)||0; ' +
+    '  s.zoom=parseFloat(g("zoom").value)||1; ' +
+    '  s.brightnessPct=parseInt(g("brightness").value,10)||100; ' +
+    '  s.contrastPct=parseInt(g("contrast").value,10)||100; ' +
+    '  s.preprocessMode=g("preprocess").value||"off"; ' +
+    '  s.preprocessThreshold=parseInt(g("pre_th").value,10)||128; ' +
     '  s.formats={qr:g("fmt_qr").checked,c128:g("fmt_c128").checked,ean13:g("fmt_ean13").checked, ' +
     '    c39:g("fmt_c39").checked,dm:g("fmt_datamatrix").checked}; ' +
     '  p._saveScanSettings(s); return s; ' +
@@ -1295,6 +1476,8 @@ begin
     '      p._scanner.stop().then(function(){ p._startScan(p._scanMode||"scan"); }) ' +
     '        .catch(function(){ p._startScan(p._scanMode||"scan"); }); ' +
     '    }catch(e){ p._startScan(p._scanMode||"scan"); } ' +
+    '  } else if(p._camActive){ ' +
+    '    p._applyTrackSettings(); ' +
     '  } ' +
     '  p._setScanStatus("Настройки сохранены"); ' +
     '  setTimeout(function(){ p._setScanStatus(""); }, 2000); ' +
@@ -1322,12 +1505,25 @@ begin
     '    stub.addEventListener("touchend", stubPressEnd); ' +
     '    stub.addEventListener("touchcancel", stubPressCancel); ' +
     '  } ' +
-    '  ["fps","qrbox","debounce"].forEach(function(id){ ' +
+    '  ["fps","qrbox","debounce","brightness","contrast","zoom","pre_th"].forEach(function(id){ ' +
     '    var el=document.getElementById("%0:s_ss_"+id); if(!el) return; ' +
     '    el.oninput=function(){ ' +
-    '      var lbl=document.getElementById("%0:s_ss_"+id+"_val"); if(lbl) lbl.textContent=el.value; ' +
+    '      var lbl=document.getElementById("%0:s_ss_"+id+"_val"); if(!lbl) return; ' +
+    '      lbl.textContent=(id==="zoom") ? parseFloat(el.value).toFixed(1) : el.value; ' +
+    '      if(p._camActive && (id==="brightness" || id==="contrast" || id==="pre_th" || (id==="zoom" && !p._scanSettings.disableZoom))){ ' +
+    '        if(id==="zoom") p._scanSettings.zoom=parseFloat(el.value); ' +
+    '        else if(id==="brightness") p._scanSettings.brightnessPct=parseInt(el.value,10); ' +
+    '        else if(id==="contrast") p._scanSettings.contrastPct=parseInt(el.value,10); ' +
+    '        else if(id==="pre_th") p._scanSettings.preprocessThreshold=parseInt(el.value,10); ' +
+    '        p._applyPreprocess(); ' +
+    '      } ' +
     '    }; ' +
     '  }); ' +
+    '  var preSel=document.getElementById("%0:s_ss_preprocess"); ' +
+    '  if(preSel) preSel.onchange=function(){ ' +
+    '    p._scanSettings.preprocessMode=preSel.value; ' +
+    '    if(p._camActive) p._applyPreprocess(); ' +
+    '  }; ' +
     '  var closeBtn=document.getElementById("%0:s_ss_close"); ' +
     '  if(closeBtn) closeBtn.onclick=function(){ p._closeScanSettings(); }; ' +
     '  var applyBtn=document.getElementById("%0:s_ss_apply"); ' +
@@ -1339,6 +1535,11 @@ begin
     '  }; ' +
     '  var refBtn=document.getElementById("%0:s_ss_refresh_cam"); ' +
     '  if(refBtn) refBtn.onclick=function(){ p._refreshCameraList(); }; ' +
+    '  var dzChk=document.getElementById("%0:s_ss_disable_zoom"); ' +
+    '  if(dzChk) dzChk.onchange=function(){ ' +
+    '    p._scanSettings.disableZoom=dzChk.checked; p._updateZoomUi(); ' +
+    '    if(p._camActive) p._applyPreprocess(); ' +
+    '  }; ' +
     '}; ' +
 
     // --- СКАНЕР: запуск ---
@@ -1358,7 +1559,7 @@ begin
     '      ajaxRequest(p,"scanSuccess",["code="+t,"mode=%2:s","submode="+m]); ' +
     '    }, ' +
     '    function(err){ if(p._scanSettings.verbose) console.warn("scan err", err); } ' +
-    '  ).catch(function(err){ ' +
+    '  ).then(function(){ return p._applyTrackSettings(); }).catch(function(err){ ' +
     '    p._setScanStatus("Ошибка камеры: "+(err&&err.message?err.message:err)); ' +
     '    if(p._scanSettings.verbose) console.error(err); ' +
     '  }); ' +
