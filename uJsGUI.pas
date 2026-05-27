@@ -1815,6 +1815,7 @@ begin
     '    if(p._scanSettings.verbose) console.error(err); ' +
     '  }); ' +
     '}; ' +
+    'p._refreshCameraList(); ' +
     'p._updateScanAreaVisual(); ' +
     'p._bindScanSettingsUI(); ' +
     'p._startScan("scan"); ' +
