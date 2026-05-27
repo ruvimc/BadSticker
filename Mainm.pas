@@ -116,6 +116,7 @@ type
     procedure UpdateEquipService(AParams: TUniStrings);
     procedure UpdateEquipFix(AParams: TUniStrings);
     procedure ToggleCamera(AOnOff: Boolean);
+    procedure RefreshCameraList;
     //procedure ShowInfoPanel(ATableDataJson: string);
     procedure SetNodeStatus(AStatus: string; ANodeName: string);
     procedure SetElementSvg(const AID, ASvgCode: string);
@@ -819,11 +820,15 @@ begin
     if FileExists(uJsGUI.ScannerProfileFilePath) then
     begin
       ApplyScannerProfileConfig(pnlScan, LoadScannerProfileFromFile, False);
-      Toast('Глобальный конфиг сканнера <b> успешно загружен');
     end
   end
   else if EventName = 'resetChain' then
     ResetChainState;
+end;
+
+procedure TMainmForm.RefreshCameraList;
+begin
+  UniSession.AddJS(pnlScan.JSName + '._refreshCameraList(); ');
 end;
 
 procedure TMainmForm.ResetChainState;
