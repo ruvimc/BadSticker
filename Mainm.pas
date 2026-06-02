@@ -7,7 +7,7 @@ uses
   System.JSON, Math, System.IOUtils, System.NetEncoding,
   Controls, Forms, uniGUITypes, uniGUIAbstractClasses, DBAccess, MyAccess,
   uniGUIClasses, uniGUImClasses, uniGUIRegClasses, uniGUIForm, uniGUImForm,
-  uniGUImJSForm,
+  uniGUImJSForm, System.Generics.Collections,
   uniGUIBaseClasses, uniPanel, uniHTMLFrame, uniBasicGrid, uniDBGrid,
   unimDBListGrid, unimDBGrid, unimPanel, unimHTMLFrame, uSettings, Web.HTTPApp,
   Data.DB, MemDS, Vcl.Imaging.pngimage, uniImage, unimImage, uniTimer, unimTimer;
@@ -1039,7 +1039,11 @@ begin
   uJsGUI.ShowCustomScanner(pnlScan, Format('%s (%s)', [FPersonFio, IfThen(FPersonProfName.IsEmpty, '🤡', FPersonProfName)]),
     '#989FC0', 'Cera Round', 'white', '#556890', 17);
   if FIsAfterLogin then
+  begin
     DestroyArkanoid(pnlScan);
+    ToggleCamera(False);
+    FIsAfterLogin := False;
+  end;
 end;
 
 procedure TMainmForm.FastShowEquipServicePanel;
