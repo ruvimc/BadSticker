@@ -804,33 +804,24 @@ begin
 
     // HTML блок
     '' +
-    '<div id="mySidePanel" style="position:fixed; bottom:0; left:0; width:100%; height:45vh; ' +
-    'transform:translateY(100%); background:#1e1e1e; border-radius:32px 32px 0 0; ' +
+    '<div id="mySidePanel" style="position:fixed; bottom:0; left:0; width:100%; height:52vh; ' +
+    'transform:translateY(100%); background:rgba(28,28,30,0.97); border-radius:28px 28px 0 0; ' +
     'z-index:9999; transition:all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); ' +
     'display:flex; flex-direction:column; overflow:hidden; ' +
-    'box-shadow:0 -10px 50px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1);">' +
-
-      '<div class="sheet-header" style="padding:15px;" ' +
-      'onclick="document.getElementById(''mySidePanel'').style.transform=''translateY(100%)'';"> ' +
-        '<div class="sheet-handle" style="width:40px; height:4px; ' +
-        'background:rgba(255,255,255,0.2); border-radius:2px; margin:0 auto;"></div>' +
-      '</div>' +
-
-      '<div class="sheet-content" style="flex:1; display:flex; flex-direction:column; ' +
-      'padding:0 25px 25px 25px; overflow:hidden;">' +
-        '<div id="' + LCID + '_table_container" style="flex:1; overflow-y:auto; ' +
-        'font-size:12px; color:rgba(255,255,255,0.9); line-height:1.6; margin-bottom:20px;">' +
+    'box-shadow:0 -10px 50px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.08);">' +
+      '<div style="flex:1; display:flex; flex-direction:column; padding:14px 16px 18px; ' +
+      'overflow:hidden; min-height:0;">' +
+        '<div id="' + LCID + '_table_container" style="flex:1; overflow-y:auto; min-height:0; ' +
+        'font-size:12px; color:rgba(255,255,255,0.9); line-height:1.5; margin-bottom:12px;">' +
         '</div>' +
-
         '<button onclick="document.getElementById(''mySidePanel'').style.transform=''translateY(100%)''; ' +
         'try{var s=window[''' + LCID + ''']; if(s)ajaxRequest(s,''sheetClosed'',[]);}catch(e){}" ' +
-        'style="width:100%; padding:18px; border-radius:18px; border:none; ' +
-        'background:rgba(255,255,255,0.1); color:#fff; font-weight:bold; ' +
-        'font-size:18px; cursor:pointer;">' +
+        'style="width:100%; padding:16px; border-radius:16px; border:none; flex-shrink:0; ' +
+        'background:rgba(255,255,255,0.1); color:#fff; font-weight:bold; font-size:16px; cursor:pointer;">' +
           'ЗАКРЫТЬ' +
         '</button>' +
-        '</div>' +
       '</div>' +
+    '</div>' +
 
     '  </div>' +
     '</div>';
@@ -1113,62 +1104,84 @@ begin
     'btnEnd.addEventListener("mousedown", pressStart); btnEnd.addEventListener("touchstart", pressStart); ' +
     'btnEnd.addEventListener("mouseup", pressEnd); btnEnd.addEventListener("mouseleave", pressEnd); btnEnd.addEventListener("touchend", pressEnd); ' +
 
-    // --- ФУНКЦИЯ: Отрисовка динамической таблицы из JSON ---
+    // --- ФУНКЦИЯ: Отрисовка инфо-панели (карточки + таблицы) ---
     'p.renderTable=function(jsonStr){ ' +
     '  var cont=document.getElementById("%0:s_table_container"); ' +
     '  var esc=function(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");}; ' +
+    '  var mkBadge=function(t,b,f,s){s=s||30;var z=t.length>2?7:(t.length>1?9:11);' +
+    '    return ''<span style="display:inline-flex;align-items:center;justify-content:center;width:''+s+''px;height:''+s+''px;''+' +
+    '    ''border-radius:50%%;background:''+b+'';color:''+(f||"#fff")+'';font-size:''+z+''px;font-weight:700;line-height:1;">''+esc(t)+''</span>'';}; ' +
+    '  var mkCard=function(badge,title,sub,meta){var h=' +
+    '    ''<div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:8px 10px;margin-bottom:10px;">''+' +
+    '    ''<table style="width:100%%;border-collapse:collapse;"><tr>''+' +
+    '    ''<td style="width:1px;vertical-align:top;padding-right:8px;">''+badge+''</td>''+' +
+    '    ''<td style="vertical-align:top;"><div style="font-size:13px;font-weight:700;color:#fff;line-height:1.25;">''+title+''</div>''; ' +
+    '    if(sub)h+=''<div style="font-size:10px;color:#989FC0;margin-top:1px;">''+sub+''</div>''; ' +
+    '    if(meta)h+=''<div style="font-size:10px;color:#94a3b8;margin-top:5px;line-height:1.45;">''+meta+''</div>''; ' +
+    '    return h+''</td></tr></table></div>'';}; ' +
+    '  var rowBadge=function(n,st){var s=(st||"").toLowerCase(),bg="rgba(100,116,139,0.25)",fg="#94a3b8";' +
+    '    if(s.indexOf("начат")>=0||s.indexOf("старт")>=0){bg="rgba(239,68,68,0.28)";fg="#ef4444";}' +
+    '    else if(s.indexOf("оконч")>=0||s.indexOf("заверш")>=0){bg="rgba(16,185,129,0.28)";fg="#10b981";}' +
+    '    return mkBadge(String(n),bg,fg,22);}; ' +
+    '  var mkListTable=function(cap,heads,rows){var h="",i,r,c,al; ' +
+    '    if(cap)h+=''<div style="font-size:10px;font-weight:700;color:#94a3b8;margin:0 0 4px 2px;">''+cap+''</div>''; ' +
+    '    h+=''<table style="width:100%%;border-collapse:collapse;font-size:11px;"><thead><tr style="color:#64748b;font-size:9px;text-transform:uppercase;">''; ' +
+    '    for(c=0;c<heads.length;c++){al=heads[c]==="Кол"?"right":"left";' +
+    '      h+=''<th style="padding:2px 4px;text-align:''+al+'';">''+heads[c]+''</th>'';} ' +
+    '    h+=''</tr></thead><tbody>''; ' +
+    '    for(i=0;i<rows.length;i++){r=rows[i];h+=''<tr style="border-top:1px solid rgba(255,255,255,0.07);">''; ' +
+    '      for(c=0;c<r.length;c++){al=heads[c]==="Кол"?"right":"left";' +
+    '        h+=''<td style="padding:5px 4px;vertical-align:top;text-align:''+al+'';">''+r[c]+''</td>'';} ' +
+    '      h+=''</tr>'';} return h+''</tbody></table>'';}; ' +
+    '  var metaJoin=function(row,keys){var p=[],k;for(k=0;k<keys.length;k++)' +
+    '    if(row[keys[k]]!==undefined&&row[keys[k]]!=="")p.push(keys[k]+": <b>"+esc(row[keys[k]])+"</b>");' +
+    '    return p.join(" · ");}; ' +
     '  try { ' +
-    '    var parsed=JSON.parse(jsonStr); ' +
+    '    var parsed=JSON.parse(jsonStr), html="", data, row, pr, parts, meta, i, rows, r; ' +
     '    if(parsed&&parsed.isAssembly){ ' +
-    '      var pr=parsed.parent||{}, parts=parsed.parts||[], html="", i, row, meta=[]; ' +
-    '      if(pr["Кол-во"]!==undefined&&pr["Кол-во"]!=="") meta.push("Кол-во: <b>"+esc(pr["Кол-во"])+"</b>"); ' +
-    '      if(pr["Кол-во блоков"]) meta.push("Блоков: <b>"+esc(pr["Кол-во блоков"])+"</b>"); ' +
-    '      if(pr["Название заказа"]) meta.push("Заказ: <b>"+esc(pr["Название заказа"])+"</b>"); ' +
-    '      if(pr["Дата создания"]) meta.push(esc(pr["Дата создания"])); ' +
-    '      html+="<div style=''background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);''+' +
-    '        ''border-radius:10px;padding:8px 10px;margin-bottom:8px;''>"; ' +
-    '      html+="<table style=''width:100%%;border-collapse:collapse;''><tr>"; ' +
-    '      html+="<td style=''width:1px;vertical-align:top;padding-right:8px;''>"; ' +
-    '      html+="<span style=''display:inline-block;background:#007AFF;color:#fff;''+' +
-    '        ''font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;''>SBR</span></td>"; ' +
-    '      html+="<td style=''vertical-align:top;''>"; ' +
-    '      html+="<div style=''font-size:13px;font-weight:700;color:#fff;line-height:1.25;''>"+esc(pr["Имя"]||"—")+"</div>"; ' +
-    '      html+="<div style=''font-size:10px;color:#989FC0;margin-top:1px;''>"+esc(pr["Артикул"]||"")+"</div>"; ' +
-    '      if(meta.length) html+="<div style=''font-size:10px;color:#94a3b8;margin-top:5px;line-height:1.45;''>"+meta.join(" · ")+"</div>"; ' +
-    '      html+="</td></tr></table></div>"; ' +
-    '      if(parts.length>0){ ' +
-    '        html+="<div style=''font-size:10px;font-weight:700;color:#94a3b8;margin:0 0 4px 2px;''>Состав ("+parts.length+")</div>"; ' +
-    '        html+="<table style=''width:100%%;border-collapse:collapse;font-size:11px;''>"; ' +
-    '        html+="<thead><tr style=''color:#64748b;font-size:9px;text-transform:uppercase;''>"; ' +
-    '        html+="<th style=''padding:2px 4px;text-align:left;width:18px;''>#</th>"; ' +
-    '        html+="<th style=''padding:2px 4px;text-align:left;''>Наименование</th>"; ' +
-    '        html+="<th style=''padding:2px 4px;text-align:right;width:42px;''>Кол</th></tr></thead><tbody>"; ' +
-    '        for(i=0;i<parts.length;i++){ ' +
-    '          row=parts[i]; ' +
-    '          html+="<tr style=''border-top:1px solid rgba(255,255,255,0.07);''>"; ' +
-    '          html+="<td style=''padding:5px 4px;color:#007AFF;font-weight:700;vertical-align:top;''>"+(i+1)+"</td>"; ' +
-    '          html+="<td style=''padding:5px 4px;vertical-align:top;''>"; ' +
-    '          html+="<div style=''font-weight:600;color:#fff;line-height:1.2;''>"+esc(row["Имя"]||row["Артикул"]||"—")+"</div>"; ' +
-    '          html+="<div style=''font-size:9px;color:#94a3b8;''>"+esc(row["Артикул"]||"")+"</div></td>"; ' +
-    '          html+="<td style=''padding:5px 4px;text-align:right;color:#DEE64C;font-weight:700;vertical-align:top;''>"+esc(row["Кол-во"]||"")+"</td>"; ' +
-    '          html+="</tr>"; ' +
-    '        } ' +
-    '        html+="</tbody></table>"; ' +
-    '      } ' +
+    '      pr=parsed.parent||{}; parts=parsed.parts||[]; ' +
+    '      meta=metaJoin(pr,["Кол-во","Кол-во блоков","Название заказа","Дата создания"]); ' +
+    '      html=mkCard(mkBadge("SBR","#007AFF","#fff",32),esc(pr["Имя"]||"—"),esc(pr["Артикул"]||""),meta); ' +
+    '      if(parts.length){rows=[];for(i=0;i<parts.length;i++){row=parts[i];rows.push([' +
+    '        mkBadge(String(i+1),"rgba(0,122,255,0.22)","#007AFF",22),' +
+    '        ''<div style="font-weight:600;color:#fff;line-height:1.2;">''+esc(row["Имя"]||row["Артикул"]||"—")+''</div>''+' +
+    '        ''<div style="font-size:9px;color:#94a3b8;">''+esc(row["Артикул"]||"")+''</div>'',' +
+    '        ''<span style="color:#DEE64C;font-weight:700;">''+esc(row["Кол-во"]||"")+''</span>'']);} ' +
+    '        html+=mkListTable("Состав ("+parts.length+")",["","Наименование","Кол"],rows);} ' +
     '      cont.innerHTML=html; return; ' +
     '    } ' +
-    '    var data=Array.isArray(parsed)?parsed:[]; ' +
-    '    if(!data||data.length===0){ cont.innerHTML="Нет данных"; return; } ' +
-    '    var cols=Object.keys(data[0]); ' +
-    '    var html="<table style=''width:100%%; border-collapse:collapse; text-align:left;''><thead><tr>"; ' +
-    '    cols.forEach(function(c){ html+="<th style=''padding:12px 8px; border-bottom:1px solid rgba(255,255,255,0.2); color:#94a3b8;''>"+c+"</th>"; }); ' +
-    '    html+="</tr></thead><tbody>"; ' +
-    '    data.forEach(function(row){ ' +
-    '      html+="<tr>"; ' +
-    '      cols.forEach(function(c){ html+="<td style=''padding:12px 8px; border-bottom:1px solid rgba(255,255,255,0.05);''>"+(row[c]||"")+"</td>"; }); ' +
-    '      html+="</tr>"; ' +
-    '    }); ' +
-    '    html+="</tbody></table>"; cont.innerHTML=html; ' +
+    '    data=Array.isArray(parsed)?parsed:[]; ' +
+    '    if(!data.length){cont.innerHTML="Нет данных";return;} ' +
+    '    row=data[0]; ' +
+    '    if(row["Диапазон"]!==undefined){ ' +
+    '      html=mkCard(mkBadge("Б","#DEE64C","#1a1a1a",30),"Блок "+esc(row["Диапазон"]||"—"),' +
+    '        "Рулон: "+esc(row["Рулон"]||""),metaJoin(row,["Заказ"])); ' +
+    '      if(data.length>1){rows=[];for(i=1;i<data.length;i++){r=data[i];rows.push([esc(r["Диапазон"]||""),esc(r["Рулон"]||""),esc(r["Заказ"]||"")]);} ' +
+    '        html+=mkListTable("Ещё диапазоны",["Диапазон","Рулон","Заказ"],rows);} ' +
+    '      cont.innerHTML=html; return; ' +
+    '    } ' +
+    '    if(row["Статус"]!==undefined){ ' +
+    '      html=mkCard(mkBadge("Ж","#64748b","#fff",30),"Журнал операций",' +
+    '        esc(row["Оборудование"]||""),"Последние "+data.length+" записей"); ' +
+    '      rows=[];for(i=0;i<data.length;i++){r=data[i];rows.push([' +
+    '        rowBadge(i+1,r["Статус"]),' +
+    '        ''<span style="font-weight:600;color:#fff;">''+esc(r["Статус"]||"")+''</span>'',' +
+    '        esc(r["Оператор"]||""),esc(r["Дата"]||"")]);} ' +
+    '      html+=mkListTable("",["","Статус","Оператор","Дата"],rows); ' +
+    '      cont.innerHTML=html; return; ' +
+    '    } ' +
+    '    if(row["Имя"]!==undefined||row["Артикул"]!==undefined){ ' +
+    '      meta=metaJoin(row,["Кол-во","Кол-во блоков","Название заказа","Дата создания","Код"]); ' +
+    '      cont.innerHTML=mkCard(mkBadge("Р","#5856D6","#fff",30),esc(row["Имя"]||row["Артикул"]||"—"),esc(row["Артикул"]||""),meta); return; ' +
+    '    } ' +
+    '    if(data.length===1){ ' +
+    '      meta="";for(i=0;i<Object.keys(row).length;i++){var k=Object.keys(row)[i];' +
+    '        if(i)meta+=" · ";meta+="<b>"+esc(k)+"</b>: "+esc(row[k]);} ' +
+    '      cont.innerHTML=mkCard(mkBadge("i","#64748b","#fff",30),"Информация","",meta); return; ' +
+    '    } ' +
+    '    rows=[];for(i=0;i<data.length;i++){r=data[i];rows.push(Object.keys(r).map(function(k){return esc(r[k]);}));} ' +
+    '    html+=mkListTable("Записи ("+data.length+")",Object.keys(row),rows); ' +
+    '    cont.innerHTML=html; ' +
     '  } catch(e){ cont.innerHTML="'+IfThen(ARollInfoJson.Length < 5, 'Нет данных' , 'Не выбрано оборудование')+'"; } ' +
     '}; ' +
 
