@@ -1115,12 +1115,52 @@ begin
 
     // --- ФУНКЦИЯ: Отрисовка динамической таблицы из JSON ---
     'p.renderTable=function(jsonStr){ ' +
-    '  var cont = document.getElementById("%0:s_table_container"); ' +
+    '  var cont=document.getElementById("%0:s_table_container"); ' +
+    '  var esc=function(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");}; ' +
     '  try { ' +
-    '    var data = JSON.parse(jsonStr); ' +
-    '    if(!data || data.length===0){ cont.innerHTML="Нет данных"; return; } ' +
-    '    var cols = Object.keys(data[0]); ' +
-    '    var html = "<table style=''width:100%%; border-collapse:collapse; text-align:left;''><thead><tr>"; ' +
+    '    var parsed=JSON.parse(jsonStr); ' +
+    '    if(parsed&&parsed.isAssembly){ ' +
+    '      var pr=parsed.parent||{}, parts=parsed.parts||[], html="", i, row, meta=[]; ' +
+    '      if(pr["Кол-во"]!==undefined&&pr["Кол-во"]!=="") meta.push("Кол-во: <b>"+esc(pr["Кол-во"])+"</b>"); ' +
+    '      if(pr["Кол-во блоков"]) meta.push("Блоков: <b>"+esc(pr["Кол-во блоков"])+"</b>"); ' +
+    '      if(pr["Название заказа"]) meta.push("Заказ: <b>"+esc(pr["Название заказа"])+"</b>"); ' +
+    '      if(pr["Дата создания"]) meta.push(esc(pr["Дата создания"])); ' +
+    '      html+="<div style=''background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);''+' +
+    '        ''border-radius:10px;padding:8px 10px;margin-bottom:8px;''>"; ' +
+    '      html+="<table style=''width:100%%;border-collapse:collapse;''><tr>"; ' +
+    '      html+="<td style=''width:1px;vertical-align:top;padding-right:8px;''>"; ' +
+    '      html+="<span style=''display:inline-block;background:#007AFF;color:#fff;''+' +
+    '        ''font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;''>SBR</span></td>"; ' +
+    '      html+="<td style=''vertical-align:top;''>"; ' +
+    '      html+="<div style=''font-size:13px;font-weight:700;color:#fff;line-height:1.25;''>"+esc(pr["Имя"]||"—")+"</div>"; ' +
+    '      html+="<div style=''font-size:10px;color:#989FC0;margin-top:1px;''>"+esc(pr["Артикул"]||"")+"</div>"; ' +
+    '      if(meta.length) html+="<div style=''font-size:10px;color:#94a3b8;margin-top:5px;line-height:1.45;''>"+meta.join(" · ")+"</div>"; ' +
+    '      html+="</td></tr></table></div>"; ' +
+    '      if(parts.length>0){ ' +
+    '        html+="<div style=''font-size:10px;font-weight:700;color:#94a3b8;margin:0 0 4px 2px;''>Состав ("+parts.length+")</div>"; ' +
+    '        html+="<table style=''width:100%%;border-collapse:collapse;font-size:11px;''>"; ' +
+    '        html+="<thead><tr style=''color:#64748b;font-size:9px;text-transform:uppercase;''>"; ' +
+    '        html+="<th style=''padding:2px 4px;text-align:left;width:18px;''>#</th>"; ' +
+    '        html+="<th style=''padding:2px 4px;text-align:left;''>Наименование</th>"; ' +
+    '        html+="<th style=''padding:2px 4px;text-align:right;width:42px;''>Кол</th></tr></thead><tbody>"; ' +
+    '        for(i=0;i<parts.length;i++){ ' +
+    '          row=parts[i]; ' +
+    '          html+="<tr style=''border-top:1px solid rgba(255,255,255,0.07);''>"; ' +
+    '          html+="<td style=''padding:5px 4px;color:#007AFF;font-weight:700;vertical-align:top;''>"+(i+1)+"</td>"; ' +
+    '          html+="<td style=''padding:5px 4px;vertical-align:top;''>"; ' +
+    '          html+="<div style=''font-weight:600;color:#fff;line-height:1.2;''>"+esc(row["Имя"]||row["Артикул"]||"—")+"</div>"; ' +
+    '          html+="<div style=''font-size:9px;color:#94a3b8;''>"+esc(row["Артикул"]||"")+"</div></td>"; ' +
+    '          html+="<td style=''padding:5px 4px;text-align:right;color:#DEE64C;font-weight:700;vertical-align:top;''>"+esc(row["Кол-во"]||"")+"</td>"; ' +
+    '          html+="</tr>"; ' +
+    '        } ' +
+    '        html+="</tbody></table>"; ' +
+    '      } ' +
+    '      cont.innerHTML=html; return; ' +
+    '    } ' +
+    '    var data=Array.isArray(parsed)?parsed:[]; ' +
+    '    if(!data||data.length===0){ cont.innerHTML="Нет данных"; return; } ' +
+    '    var cols=Object.keys(data[0]); ' +
+    '    var html="<table style=''width:100%%; border-collapse:collapse; text-align:left;''><thead><tr>"; ' +
     '    cols.forEach(function(c){ html+="<th style=''padding:12px 8px; border-bottom:1px solid rgba(255,255,255,0.2); color:#94a3b8;''>"+c+"</th>"; }); ' +
     '    html+="</tr></thead><tbody>"; ' +
     '    data.forEach(function(row){ ' +

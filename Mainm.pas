@@ -934,39 +934,39 @@ begin
   end;
 end;
 
-function MergeJsonArrays(const AJson1, AJson2: string): string;
+function BuildAssemblyRollJson(const AParentJson, APartsJson: string): string;
 var
-  Arr1, Arr2, OutArr: TJSONArray;
-  Parsed: TJSONValue;
-  I: Integer;
+  ParsedParent, ParsedParts: TJSONValue;
+  Root: TJSONObject;
+  LArr: TJSONArray;
 begin
-  OutArr := TJSONArray.Create;
+  Root := TJSONObject.Create;
   try
-    Parsed := TJSONObject.ParseJSONValue(AJson1);
+    Root.AddPair('isAssembly', TJSONBool.Create(True));
+    ParsedParent := TJSONObject.ParseJSONValue(AParentJson);
     try
-      if Parsed is TJSONArray then
+      if (ParsedParent is TJSONArray) and (TJSONArray(ParsedParent).Count > 0) then
+        Root.AddPair('parent', TJSONArray(ParsedParent).Items[0].Clone as TJSONValue)
+      else
+        Root.AddPair('parent', TJSONObject.Create);
+    finally
+      ParsedParent.Free;
+    end;
+    ParsedParts := TJSONObject.ParseJSONValue(APartsJson);
+    try
+      if ParsedParts is TJSONArray then
+        Root.AddPair('parts', ParsedParts.Clone as TJSONValue)
+      else
       begin
-        Arr1 := TJSONArray(Parsed);
-        for I := 0 to Arr1.Count - 1 do
-          OutArr.AddElement(Arr1.Items[I].Clone as TJSONValue);
+        LArr := TJSONArray.Create;
+        Root.AddPair('parts', LArr);
       end;
     finally
-      Parsed.Free;
+      ParsedParts.Free;
     end;
-    Parsed := TJSONObject.ParseJSONValue(AJson2);
-    try
-      if Parsed is TJSONArray then
-      begin
-        Arr2 := TJSONArray(Parsed);
-        for I := 0 to Arr2.Count - 1 do
-          OutArr.AddElement(Arr2.Items[I].Clone as TJSONValue);
-      end;
-    finally
-      Parsed.Free;
-    end;
-    Result := OutArr.ToJSON;
+    Result := Root.ToJSON;
   finally
-    OutArr.Free;
+    Root.Free;
   end;
 end;
 
@@ -991,7 +991,7 @@ begin
     Exit(LMainJson);
 
   LCompJson := qrySbrRollComposition.ToJSON(['Код', 'Артикул', 'Имя', 'Кол-во']);
-  Result := MergeJsonArrays(LMainJson, LCompJson);
+  Result := BuildAssemblyRollJson(LMainJson, LCompJson);
 end;
 
 procedure TMainmForm.GetRollStatus(AEquipId: string);
