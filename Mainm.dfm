@@ -1733,7 +1733,8 @@ object MainmForm: TMainmForm
       
         '  ROUND(stickers_count / (pg.sheetsInBlock / pg.sheetsInSet)) AS' +
         ' '#39#1050#1086#1083'-'#1074#1086' '#1073#1083#1086#1082#1086#1074#39','
-      '  rion.parent_id'
+      '  rion.parent_id,'
+      '  rion.id'
       'FROM Rolls_in_orders_New rion'
       '  LEFT JOIN Orders_proizvodstvo op'
       '    ON rion.order_id = op.id'
@@ -1761,6 +1762,30 @@ object MainmForm: TMainmForm
       item
         DataType = ftUnknown
         Name = 'order_id'
+        Value = nil
+      end>
+  end
+  object qrySbrRollComposition: TMyQuery
+    SQL.Strings = (
+      'SELECT'
+      '  rion.roll_id '#39#1050#1086#1076#39','
+      '  rion.article '#39#1040#1088#1090#1080#1082#1091#1083#39','
+      '  p.nameRus '#39#1048#1084#1103#39','
+      '  rion.stickers_count '#39#1050#1086#1083'-'#1074#1086#39
+      'FROM Rolls_in_orders_New parent'
+      'JOIN Rolls_in_orders_New rion'
+      '  ON rion.parent_id = parent.roll_number'
+      ' AND rion.order_id = parent.order_id'
+      'LEFT JOIN Product p ON rion.article = p.article'
+      'WHERE parent.id = :sbrRollId'
+      'ORDER BY rion.id')
+    Options.FieldOrigins = foNone
+    Left = 40
+    Top = 96
+    ParamData = <
+      item
+        DataType = ftUnknown
+        Name = 'sbrRollId'
         Value = nil
       end>
   end

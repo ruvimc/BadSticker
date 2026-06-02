@@ -50,6 +50,7 @@ type
     qryStatusMap: TMyQuery;
     qryUpdateStatus: TMyQuery;
     qryRollInfo: TMyQuery;
+    qrySbrRollComposition: TMyQuery;
     qryPresonName: TMyQuery;
     qryEquipName: TMyQuery;
     qryGetStatus: TMyQuery;
@@ -771,6 +772,7 @@ begin
     qryEquipServiceList.Connection := FConnection;
     qryEquipment.Connection := FConnection;
     qryRollInfo.Connection := FConnection;
+    qrySbrRollComposition.Connection := FConnection;
     qryEquipName.Connection := FConnection;
     qryPresonName.Connection := FConnection;
     qryStatusMap.Connection := FConnection;
@@ -932,14 +934,64 @@ begin
   end;
 end;
 
+function MergeJsonArrays(const AJson1, AJson2: string): string;
+var
+  Arr1, Arr2, OutArr: TJSONArray;
+  Parsed: TJSONValue;
+  I: Integer;
+begin
+  OutArr := TJSONArray.Create;
+  try
+    Parsed := TJSONObject.ParseJSONValue(AJson1);
+    try
+      if Parsed is TJSONArray then
+      begin
+        Arr1 := TJSONArray(Parsed);
+        for I := 0 to Arr1.Count - 1 do
+          OutArr.AddElement(Arr1.Items[I].Clone as TJSONValue);
+      end;
+    finally
+      Parsed.Free;
+    end;
+    Parsed := TJSONObject.ParseJSONValue(AJson2);
+    try
+      if Parsed is TJSONArray then
+      begin
+        Arr2 := TJSONArray(Parsed);
+        for I := 0 to Arr2.Count - 1 do
+          OutArr.AddElement(Arr2.Items[I].Clone as TJSONValue);
+      end;
+    finally
+      Parsed.Free;
+    end;
+    Result := OutArr.ToJSON;
+  finally
+    OutArr.Free;
+  end;
+end;
+
 function TMainmForm.GetRollInfo(ARollId, AOrderId: Integer; ARollFullId: string): string;
+var
+  LMainJson, LCompJson: string;
 begin
   qryRollInfo.Close;
   qryRollInfo.ParamByName('rolls_in_orders_roll_id').AsString := ARollFullId;
   qryRollInfo.ParamByName('parent_id').AsInteger := ARollId;
   qryRollInfo.ParamByName('order_id').AsInteger := AOrderId;
   qryRollInfo.Open;
-  Result := qryRollInfo.ToJSON(['Код', 'Артикул', 'Имя', 'Кол-во', 'Название заказа', 'Дата создания', 'Кол-во блоков']);
+  if qryRollInfo.IsEmpty then
+    Exit(JSON_EMPTY);
+
+  LMainJson := qryRollInfo.ToJSON(['Код', 'Артикул', 'Имя', 'Кол-во', 'Название заказа', 'Дата создания', 'Кол-во блоков']);
+
+  qrySbrRollComposition.Close;
+  qrySbrRollComposition.ParamByName('sbrRollId').AsInteger := qryRollInfo.FieldByName('id').AsInteger;
+  qrySbrRollComposition.Open;
+  if qrySbrRollComposition.IsEmpty then
+    Exit(LMainJson);
+
+  LCompJson := qrySbrRollComposition.ToJSON(['Код', 'Артикул', 'Имя', 'Кол-во']);
+  Result := MergeJsonArrays(LMainJson, LCompJson);
 end;
 
 procedure TMainmForm.GetRollStatus(AEquipId: string);
