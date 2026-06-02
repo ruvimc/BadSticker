@@ -551,7 +551,7 @@ var
   LHTML, LJS, LCID, LSScanAreaScale, LSvgUser, LSvgEquipBig, LSvgExit, LSvgScan, LSvgRollBig, LSettingsPanel: string;
   LIsLogin: Boolean;
   LScanAreaScale: Double;
-  LUserHeader, LScannerFlex, LButtonsHTML, LProcessPanel: string;
+  LUserHeader, LScannerFlex, LButtonsHTML, LProcessPanel, LCamInit: string;
 begin
   LCID := APanel.JSName;
   LScanAreaScale := AScanAreaScale;
@@ -926,12 +926,17 @@ begin
 
   APanel.JSInterface.JSCall('update', [LHTML]);
 
+  if LIsLogin then
+    LCamInit := 'p.toggleCam(false); '
+  else
+    LCamInit := 'p.toggleCam(!!p._scanSettings.autoStartCamera); ';
+
   // Основной JS блок
   LJS := Format(
     'var runScanner=function(){ var p=window["%0:s"]; if(!p)return; ' +
     'if(typeof Html5Qrcode==="undefined"){ var s=document.createElement("script"); s.src="/files/src-js/html5-qrcode.min.js"; s.onload=runScanner; document.head.appendChild(s); return; } ' +
     'if(p._scanner){try{p._scanner.stop();}catch(e){}} p._scanner=null; p._scannerCfg=null; ' +
-    'p._lastCode=""; p._lastTime=0; p._camActive=true; ' +
+    'p._lastCode=""; p._lastTime=0; p._camActive=false; ' +
     'p._nodes = { eq: false, roll: false }; ' +
 
     // --- ФУНКЦИЯ: Старт/Стоп камеры ---
@@ -1586,6 +1591,7 @@ begin
     '  if(s.videoHeight>0) vc.height=s.videoHeight; ' +
     '  if(s.aspectMode && s.aspectMode!=="0") vc.aspectRatio=parseFloat(s.aspectMode)||1; ' +
     '  return navigator.mediaDevices.getUserMedia({video:vc,audio:false}).then(function(stream){ ' +
+    '    if(!p._camActive){ stream.getTracks().forEach(function(t){ t.stop(); }); return Promise.resolve(); } ' +
     '    var view=document.getElementById("%0:s_view"); if(!view) throw new Error("view missing"); ' +
     '    view.innerHTML=""; ' +
     '    var v=document.createElement("video"); ' +
@@ -1658,7 +1664,11 @@ begin
     'p._startPreprocessDecodeScan=function(m){ ' +
     '  p._scanMode=m; p._stopPreprocessScanTimer(); ' +
     '  var run=function(){ ' +
-    '    return p._openCameraStream().then(function(){ return p._applyTrackSettings(); }).then(function(){ ' +
+    '    return p._openCameraStream().then(function(){ ' +
+    '      if(!p._camActive) return Promise.resolve(); ' +
+    '      return p._applyTrackSettings(); ' +
+    '    }).then(function(){ ' +
+    '      if(!p._camActive) return; ' +
     '      p._applyPreprocess(); ' +
     '      var fps=Math.min(60,Math.max(1,parseInt(p._scanSettings.fps,10)||10)); ' +
     '      p._preprocessScanTimer=setInterval(function(){ p._preprocessScanTick(); }, Math.max(50,Math.floor(1000/fps))); ' +
@@ -1674,6 +1684,7 @@ begin
     '  var stopP=(p._scanner&&p._scanner.isScanning&&p._scanner.isScanning()) ' +
     '    ? p._scanner.stop().catch(function(){}) : Promise.resolve(); ' +
     '  return stopP.then(function(){ ' +
+    '    if(!p._camActive) return Promise.resolve(); ' +
     '    return p._scanner.start(cam, cfg, ' +
     '      function(t){ p._onScanDecoded(t,m); }, ' +
     '      function(err){ if(p._scanSettings.verbose) console.warn("scan err", err); } ' +
@@ -1871,11 +1882,10 @@ begin
     'p._refreshCameraList(); ' +
     'p._updateScanAreaVisual(); ' +
     'p._bindScanSettingsUI(); ' +
-    'p._startScan("scan"); ' +
-    'p.toggleCam(!!p._scanSettings.autoStartCamera); ' +
+    '%3:s' +
     'p._flushPendingProfileApply(); ' +
     '}; runScanner();',
-    [LCID, LSScanAreaScale, AMode]);
+    [LCID, LSScanAreaScale, AMode, LCamInit]);
 
   UniSession.AddJS(LJS);
 end;

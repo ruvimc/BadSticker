@@ -1039,7 +1039,11 @@ begin
   uJsGUI.ShowCustomScanner(pnlScan, Format('%s (%s)', [FPersonFio, IfThen(FPersonProfName.IsEmpty, '🤡', FPersonProfName)]),
     '#989FC0', 'Cera Round', 'white', '#556890', 17);
   if FIsAfterLogin then
+  begin
     DestroyArkanoid(pnlScan);
+    ToggleCamera(False);
+    FIsAfterLogin := False;
+  end;
 end;
 
 procedure TMainmForm.FastShowEquipServicePanel;
