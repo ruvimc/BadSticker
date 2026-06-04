@@ -160,6 +160,7 @@ type
     function IsEquipOverridden: Boolean;
     procedure ClearEquipOverride;
     procedure SyncPersonEquipUI;
+    procedure RestorePersonBindingEquip;
     function GetEquipIdForInfoPanel: string;
   end;
 
@@ -1277,7 +1278,7 @@ begin
     end
     else
     begin
-      if not FEquipMode then
+      if FCurrentEquipId.IsEmpty then
       begin
         ToggleCamera(False);
         ShowMessage('Вы действительно хотите завершить не начатый рулон?' + #13#10 +' Тогда зажмите и держите кнопку "закончить"');
@@ -1341,9 +1342,9 @@ begin
   begin
     HideAddInfoPanel;
     if IsPersonEquipAssigned then
-    begin
+      RestorePersonBindingEquip
+    else
       AfterStart;
-    end;
   end
   else
   if EventName = 'equipOverrideLongPress' then
@@ -1444,15 +1445,21 @@ procedure TMainmForm.HandleScanSuccess(const ACode, AMode, ASubMode: string);
 
   procedure InitEquipMode(ALQR: TQRData; const AFromPersonBinding: Boolean = False);
   begin
-    FEquipMode := True;
-    if not AFromPersonBinding then
-      FHasScannedEquipInSession := True;
-    SetElementSvg('node_eq', SVG_EQUIP);
     FCurrentEquipAction := GetEquipStartEvent(ALQR.EquipId);
     if FCurrentEquipAction.IsEmpty and not ALQR.ActionCode.IsEmpty then
       FCurrentEquipAction := ALQR.ActionCode;
-    EquipEventToRollStatus(FCurrentEquipAction.ToInteger - 1);
     FCurrentEquipId := ALQR.EquipId;
+    FCurrentEquipName := GetEquipName(FCurrentEquipId);
+    if AFromPersonBinding then
+    begin
+      FHasScannedEquipInSession := False;
+      SyncPersonEquipUI;
+      Exit;
+    end;
+    FEquipMode := True;
+    FHasScannedEquipInSession := True;
+    SetElementSvg('node_eq', SVG_EQUIP);
+    EquipEventToRollStatus(FCurrentEquipAction.ToInteger - 1);
     GetEquipFixList(FCurrentEquipId);
     if FFixId = Ord(efsFixBegin) then
     begin
@@ -1462,7 +1469,6 @@ procedure TMainmForm.HandleScanSuccess(const ACode, AMode, ASubMode: string);
       FFixId := 0;
       Exit;
     end;
-    FCurrentEquipName := GetEquipName(FCurrentEquipId);
     SetEquipCaption(FCurrentEquipName);
     RollActionButtons(True, False);
     SetInfoMode;
@@ -1604,7 +1610,7 @@ begin
       if FBlockMode then
         RunBlockWork;
     end;
-    if FEquipMode and FRollMode then
+    if FRollMode and not FCurrentEquipId.IsEmpty then
     begin
       if not IsRollFinished then
         RollActionButtons(False, True)
@@ -1752,6 +1758,23 @@ begin
   Cookie(COOKIE_EQUIP_OVERRIDE, '-');
   SyncPersonEquipUI;
   Toast('Оборудование по умолчанию восстановлено');
+end;
+
+procedure TMainmForm.RestorePersonBindingEquip;
+begin
+  if not IsPersonEquipAssigned then
+    Exit;
+  FHasScannedEquipInSession := False;
+  FEquipMode := False;
+  FCurrentEquipId := GetPersonEquipId;
+  FCurrentEquipAction := GetEquipStartEvent(FCurrentEquipId);
+  EquipStatusOff;
+  if not FRollMode then
+  begin
+    RollActionButtons(False, False);
+    ReSetInfoMode;
+  end;
+  SyncPersonEquipUI;
 end;
 
 procedure TMainmForm.SyncPersonEquipUI;
