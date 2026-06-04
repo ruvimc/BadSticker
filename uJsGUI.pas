@@ -18,7 +18,8 @@ procedure ShowServicePanel(APanel: TUnimPanel; const ADataJSON, AComboBoxJSON,
 procedure ShowCustomScanner(APanel: TUnimPanel;
   const ATitle, ABgColor, AFontName, AFontColor, AThemeColor: string;
   AFontSize: Integer; const AMode: string = ''; AScale: Double = 1.0; ARollInfoJson: string = '';
-  ACurrentEquipId: string = ''; ACurrentRollId: string = ''; AScanAreaScale: Double = 0.50);
+  ACurrentEquipId: string = ''; ACurrentRollId: string = ''; AScanAreaScale: Double = 0.50;
+  APersonEquipBound: Boolean = False);
 
 procedure ApplyScannerProfileConfig(APanel: TUnimPanel; const AJsonConfig: string;
   ARestartCamera: Boolean = True);
@@ -546,7 +547,8 @@ procedure ShowCustomScanner(
   ARollInfoJson: string = '';
   ACurrentEquipId: string = '';
   ACurrentRollId: string = '';
-  AScanAreaScale: Double = 0.50);
+  AScanAreaScale: Double = 0.50;
+  APersonEquipBound: Boolean = False);
 var
   LHTML, LJS, LCID, LSScanAreaScale, LSvgUser, LSvgEquipBig, LSvgExit, LSvgScan, LSvgRollBig, LSettingsPanel: string;
   LIsLogin: Boolean;
@@ -733,8 +735,17 @@ begin
 //           LSvgEquipBig + '<span style="font-size:14px; font-weight:bold;">' + ACurrentEquipId + '</span></div>' +
 
       '  <div style="display:flex; justify-content:center; align-items:center; background:rgba(255,255,255,0.05); padding:20px 30px; border-radius:24px; border:1px solid rgba(255,255,255,0.1); gap:40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">' +
-      '    <div id="' + LCID + '_node_eq" onclick="ajaxRequest(window[''' + LCID + '''], ''nodeEqClick'', [''equipId=' + ACurrentEquipId + '''])" style="color:#fff; opacity:0.3; transition:all 0.5s; display:flex; flex-direction:column; align-items:center; gap:12px; cursor:pointer;">' +
-             LSvgEquipBig + '<span style="font-size:14px; font-weight:bold;">' + ACurrentEquipId + '</span></div>' +
+      '    <div id="' + LCID + '_node_eq" style="position:relative; color:#fff; opacity:0.3; transition:transform 0.2s ease; ' +
+      'display:flex; flex-direction:column; align-items:center; gap:12px; cursor:pointer; -webkit-user-select:none; user-select:none; touch-action:manipulation;">' +
+      '      <div id="' + LCID + '_node_eq_icon" style="position:relative; width:51px; height:51px; flex-shrink:0;">' +
+             LSvgEquipBig +
+      '        <div id="' + LCID + '_eq_override_badge" style="display:none; position:absolute; top:-5px; right:-5px; ' +
+      'width:24px; height:24px; padding:0; border-radius:9999px; -webkit-border-radius:9999px; overflow:hidden; ' +
+      'background:#ef4444; box-shadow:0 2px 10px rgba(239,68,68,0.75); z-index:12; pointer-events:none; ' +
+      'align-items:center; justify-content:center; box-sizing:border-box;">' +
+      '          <svg viewBox="0 0 24 24" width="13" height="13" style="display:block;" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round">' +
+      '            <path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg></div></div>' +
+      '      <span id="' + LCID + '_node_eq_caption" style="font-size:14px; font-weight:bold;">' + ACurrentEquipId + '</span></div>' +
 
 
     '    <div style="width:2px; height:50px; background:rgba(255,255,255,0.1);"></div>' + // Разделитель внутри группы
@@ -804,15 +815,14 @@ begin
 
     // HTML блок
     '' +
-    '<div id="mySidePanel" style="position:fixed; bottom:0; left:0; width:100%; height:52vh; ' +
+    '<div id="mySidePanel" style="position:fixed; bottom:0; left:0; width:100%; max-height:85vh; height:auto; ' +
     'transform:translateY(100%); background:rgba(28,28,30,0.97); border-radius:28px 28px 0 0; ' +
     'z-index:9999; transition:all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); ' +
     'display:flex; flex-direction:column; overflow:hidden; ' +
     'box-shadow:0 -10px 50px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.08);">' +
-      '<div style="flex:1; display:flex; flex-direction:column; padding:14px 16px 18px; ' +
-      'overflow:hidden; min-height:0;">' +
-        '<div id="' + LCID + '_table_container" style="flex:1; overflow-y:auto; min-height:0; ' +
-        'font-size:12px; color:rgba(255,255,255,0.9); line-height:1.5; margin-bottom:12px;">' +
+      '<div style="display:flex; flex-direction:column; padding:14px 16px 18px; overflow:hidden;">' +
+        '<div id="' + LCID + '_table_container" style="overflow-y:auto; max-height:calc(85vh - 88px); ' +
+        'font-size:13px; color:rgba(255,255,255,0.9); line-height:1.55; margin-bottom:12px;">' +
         '</div>' +
         '<button onclick="document.getElementById(''mySidePanel'').style.transform=''translateY(100%)''; ' +
         'try{var s=window[''' + LCID + ''']; if(s)ajaxRequest(s,''sheetClosed'',[]);}catch(e){}" ' +
@@ -975,8 +985,10 @@ begin
 
      // 2. Управление текстом (НОВОЕ)
     'p.setNodeText=function(node, text){ ' +
+    '  var cap=document.getElementById("%0:s_node_"+node+"_caption"); ' +
+    '  if(cap){ cap.innerText=text; return; } ' +
     '  var el=document.getElementById("%0:s_node_"+node); ' +
-    '  if(el){ var s=el.querySelector("span"); if(s) s.innerText=text; } ' +
+    '  if(el){ var s=el.querySelector("span"); if(s) s.innerText=text; else el.innerText=text; } ' +
     '}; ' +
 
 
@@ -1020,6 +1032,7 @@ begin
     //              Если логин, то скрываем панель процесса
     'p.showProcessPanel=function(show){ ' +
     '  document.getElementById("%0:s_process_panel").style.display = show ? "flex" : "none"; ' +
+    '  if(show && p._bindEquipNode) p._bindEquipNode(); ' +
     '}; p.showProcessPanel('+ IfThen(LIsLogin, 'false', 'true') +'); ' +
 
     // --- ФУНКЦИЯ: Активация иконок (Оборудование/Рулон) ---
@@ -1131,28 +1144,45 @@ begin
     '  var mkListTable=function(cap,heads,rows){var h="",i,r,c,al; ' +
     '    if(cap)h+=''<div style="font-size:10px;font-weight:700;color:#94a3b8;margin:0 0 4px 2px;">''+cap+''</div>''; ' +
     '    h+=''<table style="width:100%%;border-collapse:collapse;font-size:11px;"><thead><tr style="color:#64748b;font-size:9px;text-transform:uppercase;">''; ' +
-    '    for(c=0;c<heads.length;c++){al=heads[c]==="Кол"?"right":"left";' +
+    '    for(c=0;c<heads.length;c++){al=(heads[c]==="Кол"||heads[c]==="Блок"||heads[c]==="Значение")?"right":"left";' +
     '      h+=''<th style="padding:2px 4px;text-align:''+al+'';">''+heads[c]+''</th>'';} ' +
     '    h+=''</tr></thead><tbody>''; ' +
     '    for(i=0;i<rows.length;i++){r=rows[i];h+=''<tr style="border-top:1px solid rgba(255,255,255,0.07);">''; ' +
-    '      for(c=0;c<r.length;c++){al=heads[c]==="Кол"?"right":"left";' +
+    '      for(c=0;c<r.length;c++){al=(heads[c]==="Кол"||heads[c]==="Блок"||heads[c]==="Значение")?"right":"left";' +
     '        h+=''<td style="padding:5px 4px;vertical-align:top;text-align:''+al+'';">''+r[c]+''</td>'';} ' +
     '      h+=''</tr>'';} return h+''</tbody></table>'';}; ' +
     '  var metaJoin=function(row,keys){var p=[],k;for(k=0;k<keys.length;k++)' +
     '    if(row[keys[k]]!==undefined&&row[keys[k]]!=="")p.push(keys[k]+": <b>"+esc(row[keys[k]])+"</b>");' +
     '    return p.join(" · ");}; ' +
+    '  var fieldLetter=function(n){var m={"Код":"К","Артикул":"А","Кол-во":"К","Кол-во блоков":"Б",' +
+    '    "Название заказа":"З","Дата создания":"Д"};return m[n]||(n?n.charAt(0):"?");}; ' +
+    '  var mkQtySlash=function(s,b){s=s||0;b=b||0;return ''<span style="color:#DEE64C;font-weight:700;">''+esc(s)+''</span>''+' +
+    '    ''<span style="color:#94a3b8;font-weight:600;padding:0 2px;">/</span>''+' +
+    '    ''<span style="color:#f97316;font-weight:700;">''+esc(b)+''</span>'';}; ' +
+    '  var mkRollFieldsTable=function(row,cap,badgeColor,opts){var defs=[["Код","#94a3b8"],["Артикул","#94a3b8"],' +
+    '    ["Название заказа","#94a3b8"],["Дата создания","#94a3b8"]],rows=[],i,d,v,bc=badgeColor||"#5856D6",o=opts||{};' +
+    '    for(i=0;i<defs.length;i++){d=defs[i];v=row[d[0]];if(v===undefined||v==="")continue;' +
+    '      rows.push([mkBadge(fieldLetter(d[0]),"rgba(88,86,214,0.22)",bc,22),' +
+    '        ''<div style="font-weight:600;color:#fff;line-height:1.2;">''+d[0]+''</div>'',' +
+    '        ''<span style="color:''+d[1]+'';font-weight:700;">''+esc(v)+''</span>'']);}' +
+    '    if(o.qtyStickers!=null||o.qtyBlocks!=null)rows.push([mkBadge("/","rgba(222,230,76,0.25)","#DEE64C",22),' +
+    '      ''<div style="font-weight:600;color:#fff;line-height:1.2;">Кол-во (стик./блок)</div>'',mkQtySlash(o.qtyStickers,o.qtyBlocks)]); ' +
+    '    return rows.length?mkListTable(cap,["","Параметр","Значение"],rows):"";}; ' +
     '  try { ' +
     '    var parsed=JSON.parse(jsonStr), html="", data, row, pr, parts, meta, i, rows, r; ' +
     '    if(parsed&&parsed.isAssembly){ ' +
     '      pr=parsed.parent||{}; parts=parsed.parts||[]; ' +
-    '      meta=metaJoin(pr,["Кол-во","Кол-во блоков","Название заказа","Дата создания"]); ' +
-    '      html=mkCard(mkBadge("SBR","#007AFF","#fff",32),esc(pr["Имя"]||"—"),esc(pr["Артикул"]||""),meta); ' +
+    '      var ts=parsed.totalStickers!=null?parsed.totalStickers:0,tb=parsed.totalBlocks!=null?parsed.totalBlocks:0; ' +
+    '      meta="Кол-во: "+mkQtySlash(ts,tb); ' +
+    '      if(pr["Название заказа"])meta+=" · Заказ: <b>"+esc(pr["Название заказа"])+"</b>"; ' +
+    '      html=mkCard(mkBadge("SBR","#007AFF","#fff",34),esc(pr["Имя"]||"Сборный рулон"),esc(pr["Артикул"]||""),meta); ' +
+    '      html+=mkRollFieldsTable(pr,"Сведения","#007AFF"); ' +
     '      if(parts.length){rows=[];for(i=0;i<parts.length;i++){row=parts[i];rows.push([' +
     '        mkBadge(String(i+1),"rgba(0,122,255,0.22)","#007AFF",22),' +
     '        ''<div style="font-weight:600;color:#fff;line-height:1.2;">''+esc(row["Имя"]||row["Артикул"]||"—")+''</div>''+' +
     '        ''<div style="font-size:9px;color:#94a3b8;">''+esc(row["Артикул"]||"")+''</div>'',' +
-    '        ''<span style="color:#DEE64C;font-weight:700;">''+esc(row["Кол-во"]||"")+''</span>'']);} ' +
-    '        html+=mkListTable("Состав ("+parts.length+")",["","Наименование","Кол"],rows);} ' +
+    '        mkQtySlash(row["Кол-во"]||0,row["Кол-во блоков"]||0)]);} ' +
+    '        html+=mkListTable("Состав ("+parts.length+")",["","Наименование","Ст/Бл"],rows);} ' +
     '      cont.innerHTML=html; return; ' +
     '    } ' +
     '    data=Array.isArray(parsed)?parsed:[]; ' +
@@ -1176,8 +1206,11 @@ begin
     '      cont.innerHTML=html; return; ' +
     '    } ' +
     '    if(row["Имя"]!==undefined||row["Артикул"]!==undefined){ ' +
-    '      meta=metaJoin(row,["Кол-во","Кол-во блоков","Название заказа","Дата создания","Код"]); ' +
-    '      cont.innerHTML=mkCard(mkBadge("Р","#5856D6","#fff",30),esc(row["Имя"]||row["Артикул"]||"—"),esc(row["Артикул"]||""),meta); return; ' +
+    '      var rs=row["Кол-во"]||0,rb=row["Кол-во блоков"]||0; ' +
+    '      html=mkCard(mkBadge("Р","#5856D6","#fff",34),esc(row["Имя"]||row["Артикул"]||"—"),esc(row["Артикул"]||""),' +
+    '        (rs||rb)?("Кол-во: "+mkQtySlash(rs,rb)):""); ' +
+    '      html+=mkRollFieldsTable(row,"Сведения","#5856D6"); ' +
+    '      cont.innerHTML=html; return; ' +
     '    } ' +
     '    if(data.length===1){ ' +
     '      meta="";for(i=0;i<Object.keys(row).length;i++){var k=Object.keys(row)[i];' +
@@ -1795,6 +1828,38 @@ begin
     '  setTimeout(function(){ p._setScanStatus(""); }, 2000); ' +
     '  p._closeScanSettings(); ' +
     '}; ' +
+    'p.setEquipOverrideBadge=function(on){ ' +
+    '  p._equipOverride=!!on; ' +
+    '  var b=document.getElementById("%0:s_eq_override_badge"); ' +
+    '  if(b){ b.style.display=on?"inline-flex":"none"; b.style.borderRadius="9999px"; b.style.overflow="hidden"; } ' +
+    '}; ' +
+    'window.bsEquipPressStart=function(el,e){ ' +
+    '  if(e&&e.preventDefault)e.preventDefault(); clearTimeout(el._bsEqT); el._bsEqDidLong=false; ' +
+    '  try{navigator.vibrate(40);}catch(v){} ' +
+    '  el._bsEqT=setTimeout(function(){ el._bsEqDidLong=true; el.style.transform="scale(1.1)"; ' +
+    '    try{navigator.vibrate([80,40,100]);}catch(v){} var pan=window["%0:s"]; if(pan){ ' +
+    '      if(pan._equipOverride) ajaxRequest(pan,"equipOverrideLongPress",[]); ' +
+    '      else ajaxRequest(pan,"equipLongPress",[]); } }, 3000); }; ' +
+    'window.bsEquipPressEnd=function(el){ clearTimeout(el._bsEqT); el.style.transform=""; ' +
+    '  if(el._bsEqDidLong){ el._bsEqDidLong=false; return; } var pan=window["%0:s"]; if(!pan) return; ' +
+    '  ajaxRequest(pan,"nodeEqClick",[]); el._bsEqDidLong=false; }; ' +
+    'window.bsEquipPressCancel=function(el){ clearTimeout(el._bsEqT); el.style.transform=""; el._bsEqDidLong=false; }; ' +
+    'p._flushPendingPanelUi=function(){ ' +
+    '  var uiBag=window.__bsPendingPanelUi&&window.__bsPendingPanelUi["%0:s"]; ' +
+    '  if(!uiBag||typeof p.setNodeText!=="function")return false; ' +
+    '  if(uiBag.eq!=null)p.setNodeText("eq",uiBag.eq); ' +
+    '  if(uiBag.roll!=null)p.setNodeText("roll",uiBag.roll); ' +
+    '  if(uiBag.overrideBadge!=null&&p.setEquipOverrideBadge)p.setEquipOverrideBadge(!!uiBag.overrideBadge); ' +
+    '  if(uiBag.bindEquip&&p._bindEquipNode)p._bindEquipNode(); ' +
+    '  delete window.__bsPendingPanelUi["%0:s"]; return true; ' +
+    '}; ' +
+    'p._bindEquipNode=function(){ ' +
+    '  var eq=document.getElementById("%0:s_node_eq"); if(!eq||eq._bsBound) return; eq._bsBound=true; ' +
+    '  eq.onmousedown=function(e){ bsEquipPressStart(eq,e); }; eq.onmouseup=function(){ bsEquipPressEnd(eq); }; ' +
+    '  eq.onmouseleave=function(){ bsEquipPressCancel(eq); }; ' +
+    '  eq.ontouchstart=function(e){ bsEquipPressStart(eq,e); }; eq.ontouchend=function(){ bsEquipPressEnd(eq); }; ' +
+    '  eq.ontouchcancel=function(){ bsEquipPressCancel(eq); }; ' +
+    '}; ' +
     'p._bindScanSettingsUI=function(){ ' +
     // короткий тап — camStubClick, удержание 11 сек — настройки
     '  var stub=document.getElementById("%0:s_cam_stub"); ' +
@@ -1881,9 +1946,11 @@ begin
     '}; ' +
     'p._refreshCameraList(); ' +
     'p._updateScanAreaVisual(); ' +
+    'p._bindEquipNode(); ' +
     'p._bindScanSettingsUI(); ' +
     '%3:s' +
     'p._flushPendingProfileApply(); ' +
+    'p._flushPendingPanelUi(); setTimeout(function(){ p._flushPendingPanelUi(); }, 500); ' +
     '}; runScanner();',
     [LCID, LSScanAreaScale, AMode, LCamInit]);
 

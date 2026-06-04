@@ -1771,12 +1771,16 @@ object MainmForm: TMainmForm
       '  rion.roll_id '#39#1050#1086#1076#39','
       '  rion.article '#39#1040#1088#1090#1080#1082#1091#1083#39','
       '  p.nameRus '#39#1048#1084#1103#39','
-      '  rion.stickers_count '#39#1050#1086#1083'-'#1074#1086#39
+      '  rion.stickers_count '#39#1050#1086#1083'-'#1074#1086#39','
+      
+        '  ROUND(rion.stickers_count / (pg.sheetsInBlock / pg.sheetsInSet)) AS' +
+        ' '#39#1050#1086#1083'-'#1074#1086' '#1073#1083#1086#1082#1086#1074#39
       'FROM Rolls_in_orders_New parent'
       'JOIN Rolls_in_orders_New rion'
       '  ON rion.parent_id = parent.roll_number'
       ' AND rion.order_id = parent.order_id'
       'LEFT JOIN Product p ON rion.article = p.article'
+      '  LEFT JOIN ProductGroup pg ON p.groupId = pg.id'
       'WHERE parent.id = :sbrRollId'
       'ORDER BY rion.id')
     Options.FieldOrigins = foNone
