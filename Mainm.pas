@@ -160,7 +160,7 @@ type
     function IsEquipOverridden: Boolean;
     procedure ClearEquipOverride;
     procedure SyncPersonEquipUI;
-    procedure RestorePersonBindingEquip;
+    procedure AfterInfoSheetClosed;
     function GetEquipIdForInfoPanel: string;
   end;
 
@@ -1341,10 +1341,7 @@ begin
   else if EventName = 'sheetClosed' then
   begin
     HideAddInfoPanel;
-    if IsPersonEquipAssigned then
-      RestorePersonBindingEquip
-    else
-      AfterStart;
+    AfterInfoSheetClosed;
   end
   else
   if EventName = 'equipOverrideLongPress' then
@@ -1760,21 +1757,40 @@ begin
   Toast('Оборудование по умолчанию восстановлено');
 end;
 
-procedure TMainmForm.RestorePersonBindingEquip;
+procedure TMainmForm.AfterInfoSheetClosed;
 begin
-  if not IsPersonEquipAssigned then
-    Exit;
-  FHasScannedEquipInSession := False;
-  FEquipMode := False;
-  FCurrentEquipId := GetPersonEquipId;
-  FCurrentEquipAction := GetEquipStartEvent(FCurrentEquipId);
+  RollStatusOff;
   EquipStatusOff;
-  if not FRollMode then
+  RollActionButtons(False, False);
+  ReSetInfoMode;
+  BlockModeOff;
+  SetRollCaption('-');
+  ToggleCamera(False);
+  FRollMode := False;
+  FEquipMode := False;
+  FBlockMode := False;
+  FHasScannedEquipInSession := False;
+  FCurrentRollId := EmptyStr;
+  FCurrentOrderId := EmptyStr;
+  FCurrentUniqRollId := EmptyStr;
+  FRollInfoJson := '{[]}';
+  FBlockInfoJson := '{[]}';
+  FCurrentBlockId := 0;
+  FBlockAssignMode := False;
+  FBlockWorkflowMode := False;
+  SetMadStatus('roll', False);
+  if IsPersonEquipAssigned then
   begin
-    RollActionButtons(False, False);
-    ReSetInfoMode;
+    FCurrentEquipId := GetPersonEquipId;
+    FCurrentEquipAction := GetEquipStartEvent(FCurrentEquipId);
+    SyncPersonEquipUI;
+  end
+  else
+  begin
+    FCurrentEquipId := EmptyStr;
+    FCurrentEquipName := EmptyStr;
+    SetEquipCaption('-');
   end;
-  SyncPersonEquipUI;
 end;
 
 procedure TMainmForm.SyncPersonEquipUI;
