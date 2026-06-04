@@ -92,7 +92,8 @@ type
      FEquipFixStatusesJson, FPersonEqupmentId: string;
     FIsAfterLogin: Boolean;
     FRashodnikId, FFixId, FServiceTab: Integer;
-    FInfoMode, FBlockMode, FBlockAssignMode, FBlockWorkflowMode: Boolean;
+    FInfoMode, FBlockMode, FBlockAssignMode, FBlockWorkflowMode, FEquipReassignMode,
+      FHasScannedEquipInSession: Boolean;
     procedure FastExecSql(ASQL: string);
     procedure FastShowCustomScanner;
     procedure FastShowInitScanner;
@@ -155,6 +156,11 @@ type
     procedure UpdatePersonWorkflow(AStatus: TPersonWorkflowStatus);
     function IsPersonEquipAssigned: Boolean;
     function GetEquipStartEvent(AEquipid: string): string;
+    function GetPersonEquipId: string;
+    function IsEquipOverridden: Boolean;
+    procedure ClearEquipOverride;
+    procedure SyncPersonEquipUI;
+    function GetEquipIdForInfoPanel: string;
   end;
 
   TDatasetHelper = class helper for TMyQuery
@@ -186,6 +192,7 @@ const
 
   QR_CODE_PRINT_START = '21';
   QR_CODE_PRINT_STOP = '20';
+  COOKIE_EQUIP_OVERRIDE = '_equip_override';
 
   INSERT_EQUIP_SERVICE_LIST_SQL =
     'INSERT INTO EquipmentServiceList (equipmentId, rashodnikId, serviceDate) ' +
@@ -455,6 +462,26 @@ begin
   UniSession.AddJS(APanel.JSName + '.destroyArkanoid()');
 end;
 
+function NormalizeEquipQr(const ARawData: string): string;
+var
+  S: string;
+  I: Integer;
+begin
+  S := LowerCase(Trim(ARawData));
+  if (S = '') or (not S.StartsWith(QR_CODE_EQID_DELIM)) then
+    Exit('');
+  Result := QR_CODE_EQID_DELIM;
+  for I := 2 to Length(S) do
+  begin
+    if S[I] in ['0'..'9'] then
+      Result := Result + S[I]
+    else
+      Break;
+  end;
+  if Result = QR_CODE_EQID_DELIM then
+    Result := '';
+end;
+
 class function TQRData.Parse(const ARawData: string): TQRData;
 var
   LParts: TArray<string>;
@@ -500,22 +527,23 @@ begin
     begin
       Result.Action := qraService;
       if (Length(LParts) > 1) and LParts[1].Contains(QR_CODE_EQID_DELIM) then
-        Result.EquipId := LParts[1];
+        Result.EquipId := NormalizeEquipQr(LParts[1]);
     end
     else
     begin
       if LParts[0].Contains(QR_CODE_EQID_DELIM) then
-        Result.EquipId := LParts[0];
-      if Length(LParts) > 1 then
       begin
-        Result.ActionCode := LParts[1];
-        if LParts[1].EndsWith(QR_CODE_ACTION_START) then
-          Result.Action := qraStart
-        else if LParts[1].EndsWith(QR_CODE_ACTION_STOP) then
-          Result.Action := qraStop;
+        Result.EquipId := NormalizeEquipQr(LParts[0]);
+        Result.Action := qraStart;
       end;
     end;
     Result.IsValid := not Result.EquipId.IsEmpty;
+  end
+  else if LowerCase(Trim(ARawData)).StartsWith(QR_CODE_EQID_DELIM) then
+  begin
+    Result.EquipId := NormalizeEquipQr(ARawData);
+    Result.IsValid := not Result.EquipId.IsEmpty;
+    Result.Action := qraStart;
   end
   else if not ARawData.IsEmpty then
     Result.IsValid := True;
@@ -544,7 +572,14 @@ end;
 
 procedure TMainmForm.SetHTMLNodeText(ANodeName, AText: string);
 begin
-  UniSession.AddJS(pnlScan.JSName + '.setNodeText("'+ANodeName+'", "'+AText+'");');
+  UniSession.AddJS(
+    Format(
+      '(function(){var k=%s,n=%s,t=%s,p=window[k];' +
+      'if(p&&typeof p.setNodeText==="function")p.setNodeText(n,t);else{' +
+      'window.__bsPendingPanelUi=window.__bsPendingPanelUi||{};' +
+      'var b=window.__bsPendingPanelUi[k]=window.__bsPendingPanelUi[k]||{};b[n]=t;' +
+      'setTimeout(function(){var p2=window[k];if(p2&&p2._flushPendingPanelUi)p2._flushPendingPanelUi();},600);}})();',
+      [QuotedStr(pnlScan.JSName), QuotedStr(ANodeName), QuotedStr(AText)]));
 end;
 
 procedure TMainmForm.SetMadStatus(const AStatusType: string; AEnabled: Boolean);
@@ -729,9 +764,7 @@ procedure TMainmForm.timerInitTimer(Sender: TObject);
 begin
   if IsPersonEquipAssigned then
   begin
-    FCurrentEquipName := GetEquipName(FPersonEqupmentId);
-    SetEquipCaption(FCurrentEquipName);
-    GetRollStatus(FPersonEqupmentId);
+    SyncPersonEquipUI;
     timerInit.Enabled := False;
   end;
 end;
@@ -833,10 +866,21 @@ begin
   UniSession.AddJS(pnlScan.JSName + '._refreshCameraList(); ');
 end;
 
+function TMainmForm.GetEquipIdForInfoPanel: string;
+begin
+  if FHasScannedEquipInSession and not FCurrentEquipId.IsEmpty then
+    Result := FCurrentEquipId
+  else if IsPersonEquipAssigned then
+    Result := GetPersonEquipId
+  else
+    Result := FCurrentEquipId;
+end;
+
 procedure TMainmForm.ResetChainState;
 begin
   FRollMode := False;
   FEquipMode := False;
+  FHasScannedEquipInSession := False;
   FMadPrinter := False;
   SetMadStatus('roll', False);
   SetMadStatus('start', False);
@@ -934,13 +978,34 @@ begin
   end;
 end;
 
+function JsonFieldToInt(AObj: TJSONObject; const AKey: string): Integer;
+var
+  V: TJSONValue;
+begin
+  Result := 0;
+  if AObj = nil then
+    Exit;
+  V := AObj.GetValue(AKey);
+  if V = nil then
+    Exit;
+  if V is TJSONNumber then
+    Result := TJSONNumber(V).AsInt
+  else
+    TryStrToInt(StringReplace(V.Value, ',', '.', [rfReplaceAll]), Result);
+end;
+
 function BuildAssemblyRollJson(const AParentJson, APartsJson: string): string;
 var
   ParsedParent, ParsedParts: TJSONValue;
   Root: TJSONObject;
   LArr: TJSONArray;
+  I: Integer;
+  LPart: TJSONObject;
+  LSumStickers, LSumBlocks: Integer;
 begin
   Root := TJSONObject.Create;
+  LSumStickers := 0;
+  LSumBlocks := 0;
   try
     Root.AddPair('isAssembly', TJSONBool.Create(True));
     ParsedParent := TJSONObject.ParseJSONValue(AParentJson);
@@ -955,7 +1020,17 @@ begin
     ParsedParts := TJSONObject.ParseJSONValue(APartsJson);
     try
       if ParsedParts is TJSONArray then
-        Root.AddPair('parts', ParsedParts.Clone as TJSONValue)
+      begin
+        LArr := ParsedParts.Clone as TJSONArray;
+        Root.AddPair('parts', LArr);
+        for I := 0 to LArr.Count - 1 do
+          if LArr.Items[I] is TJSONObject then
+          begin
+            LPart := TJSONObject(LArr.Items[I]);
+            Inc(LSumStickers, JsonFieldToInt(LPart, 'Кол-во'));
+            Inc(LSumBlocks, JsonFieldToInt(LPart, 'Кол-во блоков'));
+          end;
+      end
       else
       begin
         LArr := TJSONArray.Create;
@@ -964,6 +1039,8 @@ begin
     finally
       ParsedParts.Free;
     end;
+    Root.AddPair('totalStickers', TJSONNumber.Create(LSumStickers));
+    Root.AddPair('totalBlocks', TJSONNumber.Create(LSumBlocks));
     Result := Root.ToJSON;
   finally
     Root.Free;
@@ -990,7 +1067,7 @@ begin
   if qrySbrRollComposition.IsEmpty then
     Exit(LMainJson);
 
-  LCompJson := qrySbrRollComposition.ToJSON(['Код', 'Артикул', 'Имя', 'Кол-во']);
+  LCompJson := qrySbrRollComposition.ToJSON(['Код', 'Артикул', 'Имя', 'Кол-во', 'Кол-во блоков']);
   Result := BuildAssemblyRollJson(LMainJson, LCompJson);
 end;
 
@@ -1037,13 +1114,15 @@ end;
 procedure TMainmForm.FastShowCustomScanner;
 begin
   uJsGUI.ShowCustomScanner(pnlScan, Format('%s (%s)', [FPersonFio, IfThen(FPersonProfName.IsEmpty, '🤡', FPersonProfName)]),
-    '#989FC0', 'Cera Round', 'white', '#556890', 17);
+    '#989FC0', 'Cera Round', 'white', '#556890', 17, '', 1.0, '', GetPersonEquipId, '', 0.50,
+    IsPersonEquipAssigned);
   if FIsAfterLogin then
   begin
     DestroyArkanoid(pnlScan);
     ToggleCamera(False);
     FIsAfterLogin := False;
   end;
+  SyncPersonEquipUI;
 end;
 
 procedure TMainmForm.FastShowEquipServicePanel;
@@ -1138,6 +1217,7 @@ begin
   begin
     Cookie('_username', '-');
     FQRUserId := '';
+    FHasScannedEquipInSession := False;
     FastShowInitScanner;
     DestroyWorkTracker(pnlScan);
   end
@@ -1266,16 +1346,68 @@ begin
     end;
   end
   else
-  if (EventName = 'nodeEqClick') and IsPersonEquipAssigned then
+  if EventName = 'equipOverrideLongPress' then
   begin
-    LoadDataToInfoTable(FRollStatusJson);
-    ShowAddInfoPanel
+    if not IsEquipOverridden then
+      Exit;
+    UniSession.AddJS(
+      'if(confirm("Вернуть оборудование по умолчанию?"))' +
+      'ajaxRequest(window[' + QuotedStr(pnlScan.JSName) + '],"equipOverrideReset",[]);'
+    );
+  end
+  else
+  if EventName = 'equipLongPress' then
+  begin
+    if not IsPersonEquipAssigned then
+    begin
+      Toast('Смена оборудования недоступна: нет привязки в профиле');
+      Exit;
+    end;
+    if IsEquipOverridden then
+      Exit;
+    Toast('Удержание: смена оборудования');
+    UniSession.AddJS(
+      'if(confirm("Вы собираетесь сменить оборудование. Продолжить?"))' +
+      'ajaxRequest(window[' + QuotedStr(pnlScan.JSName) + '],"equipReassignConfirm",[]);'
+    );
+  end
+  else
+  if EventName = 'equipReassignConfirm' then
+  begin
+    if not IsPersonEquipAssigned then
+      Exit;
+    FEquipReassignMode := True;
+    ToggleCamera(True);
+    Toast('Отсканируйте QR нового оборудования');
+  end
+  else
+  if EventName = 'equipOverrideReset' then
+  begin
+    if IsEquipOverridden then
+      ClearEquipOverride;
+  end
+  else
+  if EventName = 'nodeEqClick' then
+  begin
+    if GetEquipIdForInfoPanel.IsEmpty then
+      Toast('Оборудование не задано')
+    else
+    begin
+      GetRollStatus(GetEquipIdForInfoPanel);
+      LoadDataToInfoTable(FRollStatusJson);
+      ShowAddInfoPanel;
+    end;
   end
   else
   if (EventName = 'nodeRollClick') and IsPersonEquipAssigned then
   begin
-    LoadDataToInfoTable(FBlockInfoJson);
-    ShowAddInfoPanel;
+    if FRollInfoJson.IsEmpty or FRollInfoJson.Equals(JSON_EMPTY) then
+      Toast('Сначала отсканируйте рулон')
+    else
+    begin
+      LoadDataToInfoTable(FRollInfoJson);
+      ShowAddInfoPanel;
+    end;
   end
   else
   if EventName = 'saveScannerProfile' then
@@ -1310,11 +1442,15 @@ procedure TMainmForm.HandleScanSuccess(const ACode, AMode, ASubMode: string);
     Exit;
   end;
 
-  procedure InitEquipMode(ALQR: TQRData);
+  procedure InitEquipMode(ALQR: TQRData; const AFromPersonBinding: Boolean = False);
   begin
     FEquipMode := True;
+    if not AFromPersonBinding then
+      FHasScannedEquipInSession := True;
     SetElementSvg('node_eq', SVG_EQUIP);
-    FCurrentEquipAction := ALQR.ActionCode;
+    FCurrentEquipAction := GetEquipStartEvent(ALQR.EquipId);
+    if FCurrentEquipAction.IsEmpty and not ALQR.ActionCode.IsEmpty then
+      FCurrentEquipAction := ALQR.ActionCode;
     EquipEventToRollStatus(FCurrentEquipAction.ToInteger - 1);
     FCurrentEquipId := ALQR.EquipId;
     GetEquipFixList(FCurrentEquipId);
@@ -1341,13 +1477,31 @@ var
   LMode: TUserMode;
   LFullEqCode: string;
 begin
+  if FEquipReassignMode then
+  begin
+    LQR := TQRData.Parse(ACode);
+    if LQR.EquipId.IsEmpty then
+    begin
+      Toast('Отсканируйте QR оборудования (e + номер)');
+      Exit;
+    end;
+    Cookie(COOKIE_EQUIP_OVERRIDE, LQR.EquipId);
+    FEquipReassignMode := False;
+    ToggleCamera(False);
+    SyncPersonEquipUI;
+    Toast('Оборудование: ' + GetEquipName(LQR.EquipId));
+    Exit;
+  end;
+
   // Если для к работнику привязано оборудование, то работник не сможет отсканировтаь другое оборудование
   if IsPersonEquipAssigned then
   begin
-    LFullEqCode := Concat(FPersonEqupmentId, QR_CODE_VAL_DELIM, GetEquipStartEvent(FPersonEqupmentId));
+    LFullEqCode := Concat(GetPersonEquipId, QR_CODE_VAL_DELIM, GetEquipStartEvent(GetPersonEquipId));
     LQR := TQRData.Parse(LFullEqCode);
-    InitEquipMode(LQR);
+    InitEquipMode(LQR, True);
     LQR := TQRData.Parse(ACode);
+    if not LQR.EquipId.IsEmpty then
+      InitEquipMode(LQR, False);
     FBlockInfoJson := GetBlockInfo(LQR.BlockId);
   end
   else
@@ -1567,6 +1721,56 @@ end;
 function TMainmForm.IsPersonEquipAssigned: Boolean;
 begin
   Result := not FPersonEqupmentId.IsEmpty;
+end;
+
+function TMainmForm.GetPersonEquipId: string;
+var
+  LOverride: string;
+begin
+  Result := FPersonEqupmentId;
+  if Result.IsEmpty then
+    Exit;
+  LOverride := Trim(Cookie(COOKIE_EQUIP_OVERRIDE));
+  if (LOverride <> '') and (LOverride <> '-') then
+  begin
+    LOverride := NormalizeEquipQr(LOverride);
+    if not LOverride.IsEmpty then
+      Result := LOverride;
+  end;
+end;
+
+function TMainmForm.IsEquipOverridden: Boolean;
+var
+  LOverride: string;
+begin
+  LOverride := Trim(Cookie(COOKIE_EQUIP_OVERRIDE));
+  Result := IsPersonEquipAssigned and (LOverride <> '') and (LOverride <> '-');
+end;
+
+procedure TMainmForm.ClearEquipOverride;
+begin
+  Cookie(COOKIE_EQUIP_OVERRIDE, '-');
+  SyncPersonEquipUI;
+  Toast('Оборудование по умолчанию восстановлено');
+end;
+
+procedure TMainmForm.SyncPersonEquipUI;
+begin
+  if not IsPersonEquipAssigned then
+    Exit;
+  FCurrentEquipName := GetEquipName(GetPersonEquipId);
+  GetRollStatus(GetPersonEquipId);
+  UniSession.AddJS(
+    Format(
+      '(function(){var k=%s,bag={eq:%s,overrideBadge:%s,bindEquip:true},p=window[k];' +
+      'if(p&&typeof p.setNodeText==="function"){' +
+      'p.setNodeText("eq",bag.eq);if(p.setEquipOverrideBadge)p.setEquipOverrideBadge(bag.overrideBadge);' +
+      'if(p._bindEquipNode)p._bindEquipNode();}else{' +
+      'window.__bsPendingPanelUi=window.__bsPendingPanelUi||{};' +
+      'window.__bsPendingPanelUi[k]=Object.assign(window.__bsPendingPanelUi[k]||{},bag);' +
+      'setTimeout(function(){var p2=window[k];if(p2&&p2._flushPendingPanelUi)p2._flushPendingPanelUi();},600);}})();',
+      [QuotedStr(pnlScan.JSName), QuotedStr(FCurrentEquipName),
+       IfThen(IsEquipOverridden, 'true', 'false')]));
 end;
 
 function TMainmForm.IsRollFinished: Boolean;
