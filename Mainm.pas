@@ -1437,6 +1437,7 @@ procedure TMainmForm.HandleScanSuccess(const ACode, AMode, ASubMode: string);
     SetEquipCaption(FCurrentEquipName);
     GetBlockWorkflowInfo(FCurrentEquipId);
     SetBlockWorkflowMode(FBlocksWorkflowIsStarted);
+    ToggleCamera(False);
     Exit;
   end;
 
@@ -1595,6 +1596,7 @@ begin
         //FEquipMode := False;
         LoadDataToInfoTable(FBlockInfoJson);
         FBlockInfoJson := '';
+        ToggleCamera(False);
       end;
       if FEquipMode then
         RunBlockWork;
@@ -1642,6 +1644,7 @@ begin
       begin
         SetBlockAssignMode(FBlockIsAssignedBegin);
         FInfoMode := False;
+        ToggleCamera(False);
         Exit;
       end;
       FRollMode := False;
