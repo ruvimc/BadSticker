@@ -160,6 +160,7 @@ type
     function IsEquipOverridden: Boolean;
     procedure ClearEquipOverride;
     procedure SyncPersonEquipUI;
+    procedure RestorePersonBindingEquip;
     procedure AfterInfoSheetClosed;
     function GetEquipIdForInfoPanel: string;
   end;
@@ -1760,6 +1761,23 @@ begin
   Toast('Оборудование по умолчанию восстановлено');
 end;
 
+procedure TMainmForm.RestorePersonBindingEquip;
+begin
+  if not IsPersonEquipAssigned then
+    Exit;
+  FHasScannedEquipInSession := False;
+  FEquipMode := False;
+  FCurrentEquipId := GetPersonEquipId;
+  FCurrentEquipAction := GetEquipStartEvent(FCurrentEquipId);
+  EquipStatusOff;
+  if not FRollMode then
+  begin
+    RollActionButtons(False, False);
+    ReSetInfoMode;
+  end;
+  SyncPersonEquipUI;
+end;
+
 procedure TMainmForm.AfterInfoSheetClosed;
 begin
   RollStatusOff;
@@ -1783,11 +1801,7 @@ begin
   FBlockWorkflowMode := False;
   SetMadStatus('roll', False);
   if IsPersonEquipAssigned then
-  begin
-    FCurrentEquipId := GetPersonEquipId;
-    FCurrentEquipAction := GetEquipStartEvent(FCurrentEquipId);
-    SyncPersonEquipUI;
-  end
+    RestorePersonBindingEquip
   else
   begin
     FCurrentEquipId := EmptyStr;
