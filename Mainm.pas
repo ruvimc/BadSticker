@@ -4,13 +4,14 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, StrUtils,
-  System.JSON, Math, System.IOUtils, System.NetEncoding,
-  Controls, Forms, uniGUITypes, uniGUIAbstractClasses, DBAccess, MyAccess,
+  System.JSON, Math, System.IOUtils, System.NetEncoding, System.Generics.Collections,
+  Forms, uniGUITypes, uniGUIAbstractClasses, DBAccess, MyAccess,
   uniGUIClasses, uniGUImClasses, uniGUIRegClasses, uniGUIForm, uniGUImForm,
   uniGUImJSForm,
   uniGUIBaseClasses, uniPanel, uniHTMLFrame, uniBasicGrid, uniDBGrid,
   unimDBListGrid, unimDBGrid, unimPanel, unimHTMLFrame, uSettings, Web.HTTPApp,
-  Data.DB, MemDS, Vcl.Imaging.pngimage, uniImage, unimImage, uniTimer, unimTimer;
+  Data.DB, MemDS, Vcl.Imaging.pngimage, uniImage, unimImage, uniTimer, unimTimer,
+  Vcl.Controls;
 
 type
   TQREquipAction = (qraNone, qraService, qraStart, qraStop, qraBlock);
@@ -118,7 +119,7 @@ type
     procedure UpdateEquipService(AParams: TUniStrings);
     procedure UpdateEquipFix(AParams: TUniStrings);
     procedure ToggleCamera(AOnOff: Boolean);
-    procedure RefreshCameraList;
+    //procedure RefreshCameraList; deprecated;}
     //procedure ShowInfoPanel(ATableDataJson: string);
     procedure SetNodeStatus(AStatus: string; ANodeName: string);
     procedure SetElementSvg(const AID, ASvgCode: string);
@@ -475,7 +476,7 @@ begin
   Result := QR_CODE_EQID_DELIM;
   for I := 2 to Length(S) do
   begin
-    if S[I] in ['0'..'9'] then
+    if CharInSet(S[I], ['0'..'9']) then
       Result := Result + S[I]
     else
       Break;
@@ -863,10 +864,12 @@ begin
     ResetChainState;
 end;
 
+{
 procedure TMainmForm.RefreshCameraList;
 begin
   UniSession.AddJS(pnlScan.JSName + '._refreshCameraList(); ');
 end;
+}
 
 function TMainmForm.GetEquipIdForInfoPanel: string;
 begin
