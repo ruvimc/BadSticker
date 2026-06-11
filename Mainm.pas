@@ -161,6 +161,7 @@ type
     function IsEquipOverridden: Boolean;
     procedure ClearEquipOverride;
     procedure SyncPersonEquipUI;
+    procedure ResetEquipDisplayForNewOperation;
     procedure RestorePersonBindingEquip;
     procedure AfterInfoSheetClosed;
     function GetEquipIdForInfoPanel: string;
@@ -1455,6 +1456,9 @@ procedure TMainmForm.HandleScanSuccess(const ACode, AMode, ASubMode: string);
     if AFromPersonBinding then
     begin
       FHasScannedEquipInSession := False;
+      FEquipMode := False;
+      EquipStatusOff;
+      SetElementSvg('node_eq', SVG_EQUIP);
       SyncPersonEquipUI;
       Exit;
     end;
@@ -1554,6 +1558,10 @@ begin
     { 2. Roll Scan }
     if not LQR.RollId.IsEmpty then
     begin
+      if IsPersonEquipAssigned then
+        ResetEquipDisplayForNewOperation
+      else if not (FEquipMode and (not FRollMode) and FInfoMode) then
+        ResetEquipDisplayForNewOperation;
       FCurrentRollId := LQR.RollId;
       FCurrentOrderId := LQR.OrderId;
       FCurrentUniqRollId := Concat(QR_CODE_ROLL_DELIM, FCurrentRollId, QR_CODE_VAL_DELIM, FCurrentOrderId);
@@ -1593,6 +1601,7 @@ begin
       else
       if not FEquipMode then
       begin
+        ResetEquipDisplayForNewOperation;
         BlockModeOn;
         SetEquipCaption('БЛОК: №' + FCurrentBlockId.ToString);
         SetInfoMode;
@@ -1764,21 +1773,42 @@ begin
   Toast('Оборудование по умолчанию восстановлено');
 end;
 
+procedure TMainmForm.ResetEquipDisplayForNewOperation;
+begin
+  if IsPersonEquipAssigned then
+  begin
+    FHasScannedEquipInSession := False;
+    FEquipMode := False;
+    FCurrentEquipId := GetPersonEquipId;
+    FCurrentEquipAction := GetEquipStartEvent(FCurrentEquipId);
+    FCurrentEquipName := GetEquipName(FCurrentEquipId);
+  end
+  else
+  begin
+    FHasScannedEquipInSession := False;
+    FEquipMode := False;
+    FCurrentEquipId := EmptyStr;
+    FCurrentEquipName := EmptyStr;
+    FCurrentEquipAction := EmptyStr;
+  end;
+  EquipStatusOff;
+  SetElementSvg('node_eq', SVG_EQUIP);
+  if IsPersonEquipAssigned then
+    SyncPersonEquipUI
+  else
+    SetEquipCaption('-');
+end;
+
 procedure TMainmForm.RestorePersonBindingEquip;
 begin
   if not IsPersonEquipAssigned then
     Exit;
-  FHasScannedEquipInSession := False;
-  FEquipMode := False;
-  FCurrentEquipId := GetPersonEquipId;
-  FCurrentEquipAction := GetEquipStartEvent(FCurrentEquipId);
-  EquipStatusOff;
+  ResetEquipDisplayForNewOperation;
   if not FRollMode then
   begin
     RollActionButtons(False, False);
     ReSetInfoMode;
   end;
-  SyncPersonEquipUI;
 end;
 
 procedure TMainmForm.AfterInfoSheetClosed;
