@@ -1307,6 +1307,7 @@ begin
 
     // --- СКАНЕР: настройки (LocalStorage) ---
     'var SCAN_SETTINGS_KEY="badsticker_scanner_settings"; ' +
+    'var SERVER_PROFILE_LOAD_KEY="badsticker_load_server_profile"; ' +
 
     // defaults / load / save
     'p._defaultScanSettings=function(){ ' +
@@ -1326,6 +1327,12 @@ begin
     '  }catch(e){} return d; ' +
     '}; ' +
     'p._saveScanSettings=function(s){ try{ localStorage.setItem(SCAN_SETTINGS_KEY, JSON.stringify(s)); }catch(e){} }; ' +
+    'p._allowServerProfileLoad=function(){ ' +
+    '  try{ var v=localStorage.getItem(SERVER_PROFILE_LOAD_KEY); return v===null||v==="true"; }catch(e){ return true; } ' +
+    '}; ' +
+    'p._setAllowServerProfileLoad=function(on){ ' +
+    '  try{ localStorage.setItem(SERVER_PROFILE_LOAD_KEY, on?"true":"false"); }catch(e){} ' +
+    '}; ' +
     'p._scanSettings=p._loadScanSettings(); ' +
     'p._CAMERA_SETTING_KEYS=["facingMode","cameraId","videoWidth","videoHeight","aspectMode"]; ' +
     'p._extractProfileSettings=function(s){ ' +
@@ -1349,6 +1356,10 @@ begin
     '  p._fillSettingsForm(); ' +
     '  p._applyScanSettings(!!restart); ' +
     '}; ' +
+    'p.applyScannerProfileFromServer=function(jsonOrObj, restart){ ' +
+    '  if(!p._allowServerProfileLoad()) return; ' +
+    '  p.applyScannerProfile(jsonOrObj, restart); ' +
+    '}; ' +
     'p._flushPendingProfileApply=function(){ ' +
     '  if(!p._pendingProfileApply && window.__bsScanProfilePending){ ' +
     '    p._pendingProfileApply=window.__bsScanProfilePending; ' +
@@ -1356,7 +1367,7 @@ begin
     '  } ' +
     '  if(!p._pendingProfileApply) return; ' +
     '  var pa=p._pendingProfileApply; p._pendingProfileApply=null; ' +
-    '  p.applyScannerProfile(pa.cfg, pa.restart); ' +
+    '  p.applyScannerProfileFromServer(pa.cfg, pa.restart); ' +
     '}; ' +
     'p._saveProfileToServer=function(){ ' +
     '  p._ssBtnFeedback("save_profile","press"); ' +
@@ -1368,6 +1379,7 @@ begin
     'p._applyGlobalProfileFromServer=function(){ ' +
     '  p._ssBtnFeedback("apply_global","press"); ' +
     '  p._ssBtnFeedback("apply_global","busy"); ' +
+    '  p._setAllowServerProfileLoad(true); ' +
     '  ajaxRequest(p,"applyGlobalScannerProfile",[]); ' +
     '}; ' +
 
@@ -1826,6 +1838,7 @@ begin
     '  } else p._ssBtnFeedback("apply","ok"); ' +
     '  p._setScanStatus("Настройки сохранены"); ' +
     '  setTimeout(function(){ p._setScanStatus(""); }, 2000); ' +
+    '  p._setAllowServerProfileLoad(false); ' +
     '  p._closeScanSettings(); ' +
     '}; ' +
     'p.setEquipOverrideBadge=function(on){ ' +
@@ -2010,7 +2023,7 @@ begin
     'window.__bsScanProfile=' + LJson + ';' +
     'var cfg=window.__bsScanProfile;delete window.__bsScanProfile;' +
     'var p=window["' + LPanel + '"];' +
-    'if(p&&typeof p.applyScannerProfile==="function"){p.applyScannerProfile(cfg,' + LRestart + ');return;}' +
+    'if(p&&typeof p.applyScannerProfileFromServer==="function"){p.applyScannerProfileFromServer(cfg,' + LRestart + ');return;}' +
     'window.__bsScanProfilePending={cfg:cfg,restart:' + LRestart + '};' +
     '}catch(e){console.error("applyScannerProfile",e);}})();'
   );
