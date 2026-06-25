@@ -1584,6 +1584,7 @@ begin
     end;
     if LQR.Action = qraBlock then
     begin
+      FEquipMode := IsPersonEquipAssigned;
       FCurrentBlockId := LQR.BlockId;
       FBlockMode := True;
       if LQR.BlockId = 0 then
