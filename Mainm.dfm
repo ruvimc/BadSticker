@@ -1773,8 +1773,8 @@ object MainmForm: TMainmForm
       '  p.nameRus '#39#1048#1084#1103#39','
       '  rion.stickers_count '#39#1050#1086#1083'-'#1074#1086#39','
       
-        '  ROUND(rion.stickers_count / (pg.sheetsInBlock / pg.sheetsInSet)) AS' +
-        ' '#39#1050#1086#1083'-'#1074#1086' '#1073#1083#1086#1082#1086#1074#39
+        '  ROUND(rion.stickers_count / (pg.sheetsInBlock / pg.sheetsInSet' +
+        ')) AS '#39#1050#1086#1083'-'#1074#1086' '#1073#1083#1086#1082#1086#1074#39
       'FROM Rolls_in_orders_New parent'
       'JOIN Rolls_in_orders_New rion'
       '  ON rion.parent_id = parent.roll_number'
@@ -2155,5 +2155,56 @@ object MainmForm: TMainmForm
     OnTimer = timerInitTimer
     Left = 232
     Top = 352
+  end
+  object qryEquipBusy: TMyQuery
+    SQL.Strings = (
+      'SELECT'
+      '  :eqId AS equip_id,'
+      '  lr.roll_unic_id   AS last_roll,'
+      '  lr.roll_finished,'
+      '  lb.block_id       AS last_block,'
+      '  lb.block_finished,'
+      '  CASE'
+      '    WHEN IFNULL(lr.roll_finished, 1) = 0'
+      '      OR IFNULL(lb.block_finished, 1) = 0'
+      '    THEN 1 ELSE 0'
+      '  END AS equip_busy'
+      'FROM (SELECT 1) d'
+      'LEFT JOIN ('
+      '  SELECT rw.roll_unic_id, rs.finished AS roll_finished'
+      '  FROM rolls_workflow rw'
+      
+        '  LEFT JOIN roll_statuses rs ON rs.roll_statuses_id = rw.roll_st' +
+        'atus'
+      '  WHERE SUBSTRING_INDEX(rw.roll_equipment_id, '#39'*'#39', 1) = :eqId'
+      '  ORDER BY rw.roll_date_time DESC'
+      '  LIMIT 1'
+      ') lr ON 1=1'
+      'LEFT JOIN ('
+      '  SELECT bw.block_id, bw.finished AS block_finished'
+      '  FROM blocks_workflow bw'
+      '  WHERE SUBSTRING_INDEX(bw.equip_id, '#39'*'#39', 1) = :eqId'
+      '  ORDER BY bw.datecreate DESC'
+      '  LIMIT 1'
+      ') lb ON 1=1;')
+    Options.FieldOrigins = foNone
+    Left = 224
+    Top = 288
+    ParamData = <
+      item
+        DataType = ftUnknown
+        Name = 'eqId'
+        Value = nil
+      end
+      item
+        DataType = ftUnknown
+        Name = 'eqId'
+        Value = nil
+      end
+      item
+        DataType = ftUnknown
+        Name = 'eqId'
+        Value = nil
+      end>
   end
 end

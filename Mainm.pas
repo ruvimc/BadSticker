@@ -68,6 +68,7 @@ type
     tmrResetCounter: TUnimTimer;
     qryGetEqStartEvent: TMyQuery;
     timerInit: TUnimTimer;
+    qryEquipBusy: TMyQuery;
     procedure pnlScanAjaxEvent(Sender: TComponent; EventName: string;
       Params: TUniStrings);
     procedure UnimFormCreate(Sender: TObject);
@@ -84,7 +85,8 @@ type
     FPersonProfId: Integer;
     FUserMode: TUserMode;
     FMadUser, FRollMode, FEquipMode, FMadPrinter: Boolean;
-    FCurrentRollId, FCurrentUniqRollID, FCurrentOrderId, FCurrentEquipId, FCurrentEquipName: string;
+    FCurrentRollId, FCurrentUniqRollID, FCurrentOrderId, FCurrentEquipId, FCurrentEquipName,
+      FBusyEquipRollId, FBusyEquipBlockId: string;
     FLastRollAction, FCurrentBlockId: Integer;
     FLastRollIsFinished, FBlockIsAssignedBegin, FBlockIsAssignedEnd,
       FBlocksWorkflowIsStarted: Boolean;
@@ -95,6 +97,9 @@ type
     FRashodnikId, FFixId, FServiceTab: Integer;
     FInfoMode, FBlockMode, FBlockAssignMode, FBlockWorkflowMode, FEquipReassignMode,
       FHasScannedEquipInSession: Boolean;
+    FIsCurrBlockIsInRangeEquipRoll, FIsNotCurrBlockIsInRangeEquipRoll: Boolean;
+    FCurrBlockIsInRangeEquipRoll: string;
+    FIsCurrBlockInRangeRoll: Boolean;
     procedure FastExecSql(ASQL: string);
     procedure FastShowCustomScanner;
     procedure FastShowInitScanner;
@@ -165,6 +170,9 @@ type
     procedure RestorePersonBindingEquip;
     procedure AfterInfoSheetClosed;
     function GetEquipIdForInfoPanel: string;
+    procedure GetBusyEquipData(ACurrEquipId: string);
+    procedure ClearBusyEquipData;
+    function IsBlockCanFinishRoll(ABlockId: string): Boolean;
   end;
 
   TDatasetHelper = class helper for TMyQuery
@@ -825,6 +833,7 @@ begin
     qryEquipFixList.Connection := FConnection;
     qryEquipFixStatuses.Connection := FConnection;
     qryGetEqStartEvent.Connection := FConnection;
+    qryEquipBusy.Connection := FConnection;
     RegisterFormReady;
   finally
     FSettings.Free;
@@ -967,6 +976,13 @@ begin
   qryLastRollBlockInfo.Open;
   FBlockIsAssignedBegin := qryLastRollBlockInfo.FieldByName('fbid').AsInteger > 0;
   FBlockIsAssignedEnd := qryLastRollBlockInfo.FieldByName('lbid').AsInteger > 0;
+
+   //Если надо будет контроллировать завершение последнего блока и проверять входит ли в диапазон
+  GetBusyEquipData(FCurrentEquipId);
+  FCurrBlockIsInRangeEquipRoll := qryRollBlockInfo.FieldByName('Рулон').AsString;
+  FIsCurrBlockInRangeRoll := qryRollBlockInfo.FieldByName('Диапазон').AsString.Contains(ABlockId.ToString);
+  FIsCurrBlockIsInRangeEquipRoll := (FBusyEquipRollId = FCurrBlockIsInRangeEquipRoll) and FIsCurrBlockInRangeRoll;
+  FIsNotCurrBlockIsInRangeEquipRoll := (FBusyEquipRollId = FCurrBlockIsInRangeEquipRoll) and not FIsCurrBlockInRangeRoll;
   Result := qryRollBlockInfo.ToJSON(['Рулон', 'Заказ', 'Диапазон']);
 end;
 
@@ -982,6 +998,29 @@ begin
   begin
     FBlocksWorkflowIsStarted := not qryBlocksWorkflowInfo.FieldByName('finished').AsBoolean;
   end;
+end;
+
+procedure TMainmForm.GetBusyEquipData(ACurrEquipId: string);
+begin
+  qryEquipBusy.Close;
+  qryEquipBusy.ParamByName('eqId').AsString := ACurrEquipId;
+  qryEquipBusy.Open;
+  if qryEquipBusy.FieldByName('roll_finished').AsVariant = 0 then
+  begin
+    FBusyEquipRollId := qryEquipBusy.FieldByName('last_roll').AsString;
+ //   FBusyEquipBlockId := EmptyStr;
+  end;
+  if qryEquipBusy.FieldByName('block_finished').AsVariant = 0 then
+  begin
+    FBusyEquipBlockId := qryEquipBusy.FieldByName('last_block').AsString;
+   // FBusyEquipRollId := EmptyStr;
+  end;
+end;
+
+procedure TMainmForm.ClearBusyEquipData;
+begin
+  FBusyEquipRollId := EmptyStr;
+  FBusyEquipBlockId := EmptyStr
 end;
 
 function JsonFieldToInt(AObj: TJSONObject; const AKey: string): Integer;
@@ -1119,7 +1158,7 @@ end;
 
 procedure TMainmForm.FastShowCustomScanner;
 begin
-  uJsGUI.ShowCustomScanner(pnlScan, Format('%s (%s)', [FPersonFio, IfThen(FPersonProfName.IsEmpty, '🤡', FPersonProfName)]),
+  uJsGUI.ShowCustomScanner(pnlScan, Format('%s (%s)', [FPersonFio, IfThen(FPersonProfName.IsEmpty, '[проф. не задана]', FPersonProfName)]),
     '#989FC0', 'Cera Round', 'white', '#556890', 17, '', 1.0, '', GetPersonEquipId, '', 0.50,
     IsPersonEquipAssigned);
   if FIsAfterLogin then
@@ -1473,6 +1512,7 @@ procedure TMainmForm.HandleScanSuccess(const ACode, AMode, ASubMode: string);
       FBlockMode := False;
       ToggleCamera(False);
       FFixId := 0;
+      ResetEquipDisplayForNewOperation;
       Exit;
     end;
     SetEquipCaption(FCurrentEquipName);
@@ -1562,6 +1602,17 @@ begin
         ResetEquipDisplayForNewOperation
       else if not (FEquipMode and (not FRollMode) and FInfoMode) then
         ResetEquipDisplayForNewOperation;
+      {
+
+      if not FBusyEquipBlockId.IsEmpty then
+      begin
+        Toast('Нельзя выполнить операцию с рулоном.<b>Закончите операцию с блоками');
+        ResetEquipDisplayForNewOperation;
+        ClearBusyEquipData;
+        Exit;
+      end;
+      }
+
       FCurrentRollId := LQR.RollId;
       FCurrentOrderId := LQR.OrderId;
       FCurrentUniqRollId := Concat(QR_CODE_ROLL_DELIM, FCurrentRollId, QR_CODE_VAL_DELIM, FCurrentOrderId);
@@ -1584,7 +1635,18 @@ begin
     end;
     if LQR.Action = qraBlock then
     begin
-      FEquipMode := IsPersonEquipAssigned;
+     {
+      GetBusyEquipData(FCurrentEquipId);
+      if not FBusyEquipRollId.IsEmpty then
+      begin
+        Toast('Нельзя выполнить операцию с блоком.<b>Закончите операцию с рулоном');
+        ResetEquipDisplayForNewOperation;
+        ClearBusyEquipData;
+        Exit;
+      end;
+      }
+      if IsPersonEquipAssigned then
+        FEquipMode := IsPersonEquipAssigned;
       FCurrentBlockId := LQR.BlockId;
       FBlockMode := True;
       if LQR.BlockId = 0 then
@@ -1602,15 +1664,40 @@ begin
       else
       if not FEquipMode then
       begin
-        ResetEquipDisplayForNewOperation;
-        BlockModeOn;
-        SetEquipCaption('БЛОК: №' + FCurrentBlockId.ToString);
-        SetInfoMode;
-        RollActionButtons(True, False);;
-        //FEquipMode := False;
-        LoadDataToInfoTable(FBlockInfoJson);
-        FBlockInfoJson := '';
-        ToggleCamera(False);
+        // Если просканировть блок принадлежащий диапазону рулона, в случае, если начали QR рулона, а закончили блоком.
+        if FIsCurrBlockIsInRangeEquipRoll or FIsNotCurrBlockIsInRangeEquipRoll then
+        begin
+          EquipStatusOn;
+          ReSetInfoMode;
+          if FIsCurrBlockIsInRangeEquipRoll then
+            RollActionButtons(False, True)
+          else if FIsNotCurrBlockIsInRangeEquipRoll then
+            RollActionButtons(True, False);
+          FCurrentRollId := FCurrBlockIsInRangeEquipRoll.Substring(1).Split([QR_CODE_VAL_DELIM])[0];
+          FCurrentOrderId := FCurrBlockIsInRangeEquipRoll.Substring(1).Split([QR_CODE_VAL_DELIM])[1];
+          FCurrentUniqRollID := FCurrBlockIsInRangeEquipRoll;
+          RollStatusOn;
+          SetRollCaption('РУЛОН: №' + FCurrentRollId);
+          FRollMode := True;
+          FEquipMode := True;
+          SetWorkflowCaption(FCurrentEquipActionPrefix);
+          FBlockMode := False;
+          ClearBusyEquipData;
+          Toast('Рулон ' + FCurrentRollId + ' был звершен!');
+          Exit;
+        end
+        else
+        begin
+          ResetEquipDisplayForNewOperation;
+          BlockModeOn;
+          SetEquipCaption('БЛОК: №' + FCurrentBlockId.ToString);
+          SetInfoMode;
+          RollActionButtons(True, False);;
+          //FEquipMode := False;
+          LoadDataToInfoTable(FBlockInfoJson);
+          FBlockInfoJson := '';
+          ToggleCamera(False);
+        end;
       end;
       if FEquipMode then
         RunBlockWork;
@@ -1630,6 +1717,24 @@ begin
       else
       begin
         RollActionButtons(True, False)
+      end;
+      GetBusyEquipData(FCurrentEquipId);
+      GetBlockInfo(FBusyEquipBlockId.Substring(1).ToInteger);
+      // Проверка, если начат новый рулон на данном оборудовании, то позволяет начать игнорируя не законченный
+      if not FBusyEquipRollId.Equals(FCurrentUniqRollId) then
+      begin
+        RollActionButtons(True, False);
+        ClearBusyEquipData;
+      end;
+      // Если отсканирован рулон, но последний блок на этом оборудовании принадлежит диапазону рулона
+      if FIsCurrBlockInRangeRoll then
+      begin
+        Toast('Работа ведется по блокам.<b> Отсканируйте QR-код блока');
+        SetRollCaption('-');
+        ResetEquipDisplayForNewOperation;
+        RollStatusOff;
+        EquipStatusOff;
+        Exit;
       end;
       EquipStatusOn;
       SetEquipCaption(FCurrentEquipName);
@@ -1757,6 +1862,11 @@ begin
     if not LOverride.IsEmpty then
       Result := LOverride;
   end;
+end;
+
+function TMainmForm.IsBlockCanFinishRoll(ABlockId: string): Boolean;
+begin
+//
 end;
 
 function TMainmForm.IsEquipOverridden: Boolean;
