@@ -91,8 +91,7 @@ type
     FLastRollIsFinished, FBlockIsAssignedBegin, FBlockIsAssignedEnd,
       FBlocksWorkflowIsStarted: Boolean;
     FCurrentEquipAction, FCurrentEquipActionPrefix, FFixComment: string;
-    FRollInfoJson, FRollStatusJson, FBlockInfoJson, FEquipFixListJson,
-     FEquipFixStatusesJson: string;
+    FRollInfoJson, FRollStatusJson, FBlockInfoJson, FEquipFixListJson: string;
     FIsAfterLogin: Boolean;
     FRashodnikId, FFixId, FServiceTab: Integer;
     FInfoMode, FBlockMode, FBlockAssignMode, FBlockWorkflowMode, FEquipReassignMode,
@@ -122,7 +121,7 @@ type
     //procedure ReSetBlockAssignMode;
     procedure RollCompleteEffect;
     procedure UpdateEquipService(AParams: TUniStrings);
-    procedure UpdateEquipFix(AParams: TUniStrings);
+    procedure UpdateEquipFix(AFixStatusId: Integer);
     procedure ToggleCamera(AOnOff: Boolean);
     //procedure RefreshCameraList; deprecated;}
     //procedure ShowInfoPanel(ATableDataJson: string);
@@ -163,8 +162,9 @@ type
     function IsPersonEquipAssigned: Boolean;
     function GetEquipStartEvent(AEquipid: string): string;
     function GetPersonEquipId: string;
-    function IsEquipOverridden: Boolean;
     function CanChangeEquipBinding: Boolean;
+    function EquipIsInRepair(const AEquipId: string = ''): Boolean;
+    function ResolveEquipStorageId(const AEquipId: string): string;
     procedure ClearEquipOverride;
     procedure SyncPersonEquipUI;
     procedure ResetEquipDisplayForNewOperation;
@@ -173,7 +173,6 @@ type
     function GetEquipIdForInfoPanel: string;
     procedure GetBusyEquipData(ACurrEquipId: string);
     procedure ClearBusyEquipData;
-    function IsBlockCanFinishRoll(ABlockId: string): Boolean;
   end;
 
   TDatasetHelper = class helper for TMyQuery
@@ -216,6 +215,9 @@ const
 
   INSERT_PERSON_WORKFLOW_STATUS = 'INSERT INTO person_workflow (person_id, status, datecreate) ' +
     'VALUES (''%s'', %d, NOW())';
+
+  MSG_EQUIP_PUT_REPAIR_OK = 'Оборудование отправлено в ремонт';
+  MSG_EQUIP_REMOVE_REPAIR_OK = 'Оборудование снято с ремонта';
 
   LAST_ERROR_ROLL_UPDATE_SQL =
     'UPDATE rolls_workflow rw' +
@@ -495,6 +497,13 @@ begin
     Result := '';
 end;
 
+function TMainmForm.ResolveEquipStorageId(const AEquipId: string): string;
+begin
+  Result := NormalizeEquipQr(AEquipId);
+  if Result.IsEmpty then
+    Result := Trim(AEquipId);
+end;
+
 class function TQRData.Parse(const ARawData: string): TQRData;
 var
   LParts: TArray<string>;
@@ -709,17 +718,29 @@ begin
   FastExecSQL(Format(INSERT_EQUIP_SERVICE_LIST_SQL, [FCurrentEquipId, FRashodnikId, QuotedStr(FormatDateTime('yyyy-mm-dd hh:nn:ss', Now))]));
 end;
 
-procedure TMainmForm.UpdateEquipFix(AParams: TUniStrings);
+procedure TMainmForm.UpdateEquipFix(AFixStatusId: Integer);
+var
+  LEquipKey, LComment: string;
 begin
-  FFixId := AParams['id'].AsInteger;
-  FastExecSQL(Format(INSERT_EQUIP_FIX_LIST_SQL, [FCurrentEquipId, FFixId, FFixComment]));
+  LEquipKey := ResolveEquipStorageId(FCurrentEquipId);
+  if LEquipKey.IsEmpty then
+    LEquipKey := Trim(FCurrentEquipId);
+  if AFixStatusId = Ord(efsFixBegin) then
+    LComment := 'Поставлено на ремонт'
+  else if AFixStatusId = Ord(efsFixEnd) then
+    LComment := 'Снято с ремонта'
+  else
+    LComment := '';
+  LComment := StringReplace(LComment, '''', '''''', [rfReplaceAll]);
+  FastExecSQL(Format(INSERT_EQUIP_FIX_LIST_SQL, [LEquipKey, AFixStatusId, LComment]));
 end;
 
 procedure TMainmForm.UpdateInfoBadge(const AText: string);
 begin
   UniSession.AddJS
-    (Format('var e=document.getElementById("%s_info_badge");if(e)e.innerText="%s";',
-    [pnlScan.JSName, AText]));
+    (Format('(function(){var e=document.getElementById("%s_info_badge");if(e)e.innerText="%s";' +
+    'var p=window[%s];if(p&&p._clearTextSelection)p._clearTextSelection();})();',
+    [pnlScan.JSName, AText, QuotedStr(pnlScan.JSName)]));
 end;
 
 procedure TMainmForm.UpdatePersonWorkflow(AStatus: TPersonWorkflowStatus);
@@ -926,16 +947,28 @@ begin
 end;
 
 procedure TMainmForm.GetEquipFixList(AEquipId: string);
+var
+  LEquipKey: string;
 begin
+  LEquipKey := ResolveEquipStorageId(AEquipId);
+  if LEquipKey.IsEmpty then
+    LEquipKey := Trim(AEquipId);
   qryEquipFixList.Close;
-  qryEquipFixList.ParamByName('eqId').AsString := AEquipId;
+  if LEquipKey.IsEmpty then
+  begin
+    FEquipFixListJson := '[]';
+    FFixId := 0;
+    Exit;
+  end;
+  qryEquipFixList.ParamByName('eqId').AsString := LEquipKey;
   qryEquipFixList.Open;
-  qryEquipFixStatuses.Close;
-  qryEquipFixStatuses.Open;
   FEquipFixListJson := qryEquipFixList.ToJSON(['equipment_name', 'name', 'datecreate']);
-  qryEquipFixList.First;
-  FFixId := qryEquipFixList.FieldByName('equip_fix_id').AsInteger;
-  FEquipFixStatusesJson := qryEquipFixStatuses.ToJSON(['id', 'name']);
+  FFixId := 0;
+  if not qryEquipFixList.IsEmpty then
+  begin
+    qryEquipFixList.First;
+    FFixId := qryEquipFixList.FieldByName('equip_fix_id').AsInteger;
+  end;
 end;
 
 function TMainmForm.GetEquipName(AEqipId: string): string;
@@ -1179,10 +1212,15 @@ begin
 end;
 
 procedure TMainmForm.FastShowEquipFixPanel;
+var
+  LInRepair: Boolean;
 begin
+  FServiceTab := 1;
   GetEquipFixList(FCurrentEquipId);
-  ShowServicePanel(pnlScan, FEquipFixListJson, FEquipFixStatusesJson, '#989FC0',
-    'Cera Round', 'white', FCurrentEquipName, '#343F50', 1);
+  LInRepair := EquipIsInRepair;
+  ShowServicePanel(pnlScan, FEquipFixListJson, '[]', '#989FC0',
+    'Cera Round', 'white', FCurrentEquipName, '#343F50', 1,
+    True, LInRepair, Ord(efsFixBegin), Ord(efsFixEnd));
 end;
 
 procedure TMainmForm.pnlScanAjaxEvent(Sender: TComponent; EventName: string; Params: TUniStrings);
@@ -1273,15 +1311,27 @@ begin
   else
   if EventName = 'itemAdded' then
   begin
-    if FServiceTab = 0 then
-    begin
-      UpdateEquipService(Params);
+    if FServiceTab <> 0 then
+      Exit;
+    UpdateEquipService(Params);
+    ToggleCamera(False);
+  end
+  else
+  if EventName = 'equipFixAction' then
+  begin
+    FServiceTab := 1;
+    try
+      FFixId := Params['id'].AsInteger;
+      UpdateEquipFix(FFixId);
+      if FFixId = Ord(efsFixBegin) then
+        Toast(MSG_EQUIP_PUT_REPAIR_OK)
+      else if FFixId = Ord(efsFixEnd) then
+        Toast(MSG_EQUIP_REMOVE_REPAIR_OK);
+      FastShowEquipFixPanel;
       ToggleCamera(False);
-    end
-    else
-    begin
-      UpdateEquipFix(Params);
-      ToggleCamera(True);
+    except
+      on E: Exception do
+        Toast('Ошибка: ' + E.Message);
     end;
   end
   else
@@ -1511,7 +1561,7 @@ procedure TMainmForm.HandleScanSuccess(const ACode, AMode, ASubMode: string);
     SetElementSvg('node_eq', SVG_EQUIP);
     EquipEventToRollStatus(FCurrentEquipAction.ToInteger - 1);
     GetEquipFixList(FCurrentEquipId);
-    if FFixId = Ord(efsFixBegin) then
+    if EquipIsInRepair then
     begin
       Toast('Оборудование в ремонте');
       FBlockMode := False;
@@ -1876,14 +1926,11 @@ begin
     and not FHasScannedEquipInSession;
 end;
 
-function TMainmForm.IsBlockCanFinishRoll(ABlockId: string): Boolean;
+function TMainmForm.EquipIsInRepair(const AEquipId: string): Boolean;
 begin
-//
-end;
-
-function TMainmForm.IsEquipOverridden: Boolean;
-begin
-  Result := IsPersonEquipAssigned;
+  if AEquipId <> '' then
+    GetEquipFixList(AEquipId);
+  Result := FFixId = Ord(efsFixBegin);
 end;
 
 procedure TMainmForm.ClearEquipOverride;

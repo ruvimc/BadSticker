@@ -13,7 +13,9 @@ procedure Toast(const AText: string; AAlign: TAlign = alBottom);
 procedure SetSidePanelState(AOpen: Boolean);
 
 procedure ShowServicePanel(APanel: TUnimPanel; const ADataJSON, AComboBoxJSON,
-  ABgColor, AFontName, AFontColor, ACaption, ACaptionColor: string; AActiveTabIndex: Integer = 0);
+  ABgColor, AFontName, AFontColor, ACaption, ACaptionColor: string; AActiveTabIndex: Integer = 0;
+  AFixButtonsMode: Boolean = False; AFixInRepair: Boolean = False;
+  AFixPutId: Integer = 1; AFixRemoveId: Integer = 2);
 
 procedure ShowCustomScanner(APanel: TUnimPanel;
   const ATitle, ABgColor, AFontName, AFontColor, AThemeColor: string;
@@ -391,7 +393,9 @@ begin
 end;
 
 procedure ShowServicePanel(APanel: TUnimPanel; const ADataJSON, AComboBoxJSON,
-  ABgColor, AFontName, AFontColor, ACaption, ACaptionColor: string; AActiveTabIndex: Integer = 0);
+  ABgColor, AFontName, AFontColor, ACaption, ACaptionColor: string; AActiveTabIndex: Integer = 0;
+  AFixButtonsMode: Boolean = False; AFixInRepair: Boolean = False;
+  AFixPutId: Integer = 1; AFixRemoveId: Integer = 2);
 var
   LHTML, LJS, LCID, LCap: string;
   LCColor: string;
@@ -460,12 +464,17 @@ begin
     '      <button onclick="window._cancelSvc()" style="margin-top:40px; width:220px; height:65px; background:#ef4444; color:white; border:none; border-radius:20px; font-weight:bold;">ОТМЕНА</button>' +
     '    </div>' +
 
-    // Нижняя панель
-    '    <div style="padding:25px; background:rgba(0,0,0,0.2); display:flex; gap:12px; border-top:1px solid rgba(255,255,255,0.05);">' +
+    // Bottom: service consumables
+    '    <div id="' + LCID + '_svcbar" style="padding:25px; background:rgba(0,0,0,0.2); display:flex; gap:12px; border-top:1px solid rgba(255,255,255,0.05);">' +
     '      <div id="' + LCID + '_cb" style="flex:1; height:55px; border-radius:18px; background:rgba(255,255,255,0.9); ' +
     '        padding:0 15px; font-size:16px; font-weight:600; color:#000; display:flex; align-items:center; cursor:pointer;">Выберите...</div>' +
     '      <div id="' + LCID + '_add" style="width:65px; height:55px; background:#10b981; color:#fff; border-radius:18px; ' +
     '        display:flex; align-items:center; justify-content:center; font-size:32px; cursor:pointer;">+</div>' +
+    '    </div>' +
+    // Bottom: repair single action button
+    '    <div id="' + LCID + '_fixbar" style="display:none; padding:25px; background:rgba(0,0,0,0.2); border-top:1px solid rgba(255,255,255,0.05);">' +
+    '      <div id="' + LCID + '_fixbtn" style="width:100%; height:55px; border-radius:18px; display:flex; align-items:center; justify-content:center; ' +
+    '        font-size:16px; font-weight:700; color:#fff; cursor:pointer;"></div>' +
     '    </div>' +
     '  </div>' +
     '</div>';
@@ -487,8 +496,15 @@ begin
     '    t.style.background = (i===idx) ? "rgba(255,255,255,0.1)" : "transparent";' +
     '    t.style.opacity = (i===idx) ? "1" : "0.5";' +
     '  });' +
+    '  if(window._applySvcBottom) window._applySvcBottom(idx);' +
     '  ajaxRequest(%6:s, "tabChanged", ["index="+idx]);' +
     '};' +
+    'window._applySvcBottom = function(idx){ ' +
+    '  var svc=document.getElementById("%0:s_svcbar"), fix=document.getElementById("%0:s_fixbar"); ' +
+    '  if(!fix){ if(svc) svc.style.display="flex"; return; } ' +
+    '  if(idx===1){ if(svc) svc.style.display="none"; fix.style.display="block"; } ' +
+    '  else { if(svc) svc.style.display="flex"; fix.style.display="none"; } ' +
+    '}; ' +
 
     // Dropdown настройки
     'var bgCol = %5:s; drop.style.background = "color-mix(in srgb, " + bgCol + ", black 30%%)";' +
@@ -524,7 +540,18 @@ begin
     '      n[ks[0]]=(d[0]?d[0][ks[0]]:""); n[ks[1]]=v; n[ks[2]]=ds; d.unshift(n); draw(d); ' +
     '      ajaxRequest(%6:s, "itemAdded", ["id="+id, "val="+v, "tab="+window._activeTab]); ' +
     '    } }, 1000); ' +
-    '};',
+    '};' +
+    IfThen(AFixButtonsMode,
+    'var fixBtn=document.getElementById("%0:s_fixbtn"); ' +
+    'window._setFixBtn=function(inRepair){ ' +
+    '  if(!fixBtn) return; ' +
+    '  if(inRepair){ fixBtn.innerText="Снять с ремонта"; fixBtn.style.background="#f59e0b"; fixBtn._fixId=%10:d; } ' +
+    '  else { fixBtn.innerText="Отправить в ремонт"; fixBtn.style.background="#10b981"; fixBtn._fixId=%9:d; } ' +
+    '}; ' +
+    'window._setFixBtn(!!%8:d); ' +
+    'fixBtn.onclick=function(){ ajaxRequest(%6:s,"equipFixAction",["id="+fixBtn._fixId]); }; ' +
+    'window._applySvcBottom(window._activeTab); ',
+    'window._applySvcBottom(window._activeTab); '),
 
     [LCID, LHTML,
      IfThen(ADataJSON = '', '[]', ADataJSON),
@@ -532,7 +559,10 @@ begin
      AFontName,
      QuotedStr(ABgColor),
      APanel.JSName,
-     AActiveTabIndex // %7:d
+     AActiveTabIndex,
+     Ord(AFixInRepair),
+     AFixPutId,
+     AFixRemoveId
     ]);
 
   UniSession.AddJS(LJS);
@@ -749,8 +779,8 @@ begin
 
 
     '    <div style="width:2px; height:50px; background:rgba(255,255,255,0.1);"></div>' + // Разделитель внутри группы
-    '    <div id="' + LCID + '_node_roll" onclick="ajaxRequest(window[''' + LCID + '''], ''nodeRollClick'', [])" style="color:#fff; opacity:0.3; transition:all 0.5s; display:flex; flex-direction:column; align-items:center; gap:12px;">' +
-           LSvgRollBig + '<span style="font-size:14px; font-weight:bold;">' + ACurrentRollId + '</span></div>' +
+    '    <div id="' + LCID + '_node_roll" onclick="ajaxRequest(window[''' + LCID + '''], ''nodeRollClick'', [])" style="color:#fff; opacity:0.3; transition:all 0.5s; display:flex; flex-direction:column; align-items:center; gap:12px; cursor:pointer; -webkit-user-select:none; user-select:none; touch-action:manipulation;">' +
+           LSvgRollBig + '<span id="' + LCID + '_node_roll_caption" style="font-size:14px; font-weight:bold;">' + ACurrentRollId + '</span></div>' +
     '  </div>' +
     '  ' +
     '  <div style="display:flex; justify-content:center; margin:-5px 0;">' +
@@ -841,6 +871,9 @@ begin
   '<div id="' + LCID + '_wrap" style="position:absolute; top:0; left:0; right:0; bottom:0; background:' + ABgColor + '; display:flex; flex-direction:column; font-family:' + AFontName + '; overflow:hidden; color:' + AFontColor + ';">' +
   '  <style>' +
   '    #' + LCID + '_wrap * { box-sizing: border-box; } ' +
+  '    #' + LCID + '_wrap, #' + LCID + '_wrap * { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; } ' +
+  '    #' + LCID + '_wrap input, #' + LCID + '_wrap select, #' + LCID + '_wrap textarea { -webkit-user-select:text; user-select:text; } ' +
+  '    #' + LCID + '_decode_sink, #' + LCID + '_decode_sink * { visibility:hidden !important; user-select:none !important; pointer-events:none !important; } ' +
   '    #' + LCID + '_view_host { position:absolute; top:0; left:0; right:0; bottom:0; border-radius:26px; overflow:hidden; z-index:1; } ' +
   '    #' + LCID + '_view { width:100%%; height:100%%; } ' +
   '    #' + LCID + '_view video { display:block; } ' +
@@ -884,7 +917,7 @@ begin
     '           ontouchend="clearTimeout(this.lp);">' +
     '        <div id="' + LCID + '_view" style="width:100%; height:100%; border-radius:26px; overflow:hidden;"></div>' +
     '      </div>' +
-    '      <div id="' + LCID + '_decode_sink" style="position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;left:-9999px;top:0;"></div>' +
+      '      <div id="' + LCID + '_decode_sink" aria-hidden="true" style="position:fixed;width:1px;height:1px;overflow:hidden;opacity:0;visibility:hidden;pointer-events:none;left:-9999px;top:0;z-index:-1;-webkit-user-select:none;user-select:none;"></div>' +
     '      <div id="' + LCID + '_scan_area"></div>' +
     '      <div id="' + LCID + '_cam_stub" style="position:absolute; top:0; left:0; width:100%; height:100%; background:#1e293b; border-radius:26px; display:none; align-items:center; justify-content:center; z-index:9; cursor:pointer; -webkit-user-select:none; user-select:none;">' +
     '        <div style="color:#94a3b8; font-family:fop; font-size:48px;">&#xf029</div>' +
@@ -969,6 +1002,10 @@ begin
     '}; ' +
 
     // --- ФУНКЦИЯ: Установка текста для произвольного элемента
+    'p._clearTextSelection=function(){ ' +
+    '  try{ var sel=window.getSelection&&window.getSelection(); if(sel&&sel.removeAllRanges) sel.removeAllRanges(); ' +
+    '  else if(document.selection) document.selection.empty(); }catch(e){} ' +
+    '}; ' +
     'p.setElementText=function(id, text){ ' +
     '  var el = document.getElementById("' + LCID + '_" + id); ' +
     '  if(!el) { console.error("Element not found: " + id); return; } ' + // Лог в консоль для отладки
@@ -981,14 +1018,15 @@ begin
          // Если это заголовок или простой div, меняем текст напрямую
     '    el.textContent = text; ' +
     '  } ' +
+    '  p._clearTextSelection(); ' +
     '}; ' +
 
      // 2. Управление текстом (НОВОЕ)
     'p.setNodeText=function(node, text){ ' +
     '  var cap=document.getElementById("%0:s_node_"+node+"_caption"); ' +
-    '  if(cap){ cap.innerText=text; return; } ' +
+    '  if(cap){ cap.innerText=text; p._clearTextSelection(); return; } ' +
     '  var el=document.getElementById("%0:s_node_"+node); ' +
-    '  if(el){ var s=el.querySelector("span"); if(s) s.innerText=text; else el.innerText=text; } ' +
+    '  if(el){ var s=el.querySelector("span"); if(s) s.innerText=text; else el.innerText=text; p._clearTextSelection(); } ' +
     '}; ' +
 
 
@@ -1656,8 +1694,11 @@ begin
     '  var deb=p._scanSettings.debounceMs||2500, now=Date.now(); ' +
     '  if(t===p._lastCode && (now-p._lastTime<deb)) return; ' +
     '  p._lastCode=t; p._lastTime=now; ' +
+    '  p._clearTextSelection(); ' +
     '  try{ document.getElementById("%0:s_beep").play(); }catch(e){} ' +
     '  ajaxRequest(p,"scanSuccess",["code="+t,"mode=%2:s","submode="+m]); ' +
+    '  setTimeout(function(){ p._clearTextSelection(); }, 50); ' +
+    '  setTimeout(function(){ p._clearTextSelection(); }, 400); ' +
     '}; ' +
     'p._decodeCanvasFrame=function(canvas){ ' +
     '  var dec=p._scanner&&p._scanner.qrcode; ' +
@@ -1673,7 +1714,10 @@ begin
     '      canvas.toBlob(function(blob){ ' +
     '        if(!blob) return reject(err); ' +
     '        var f=new File([blob],"frame.png",{type:blob.type||"image/png"}); ' +
-    '        p._scanner.scanFileV2(f,true).then(function(r){ resolve(r.decodedText||r.text); }).catch(reject); ' +
+    '        p._scanner.scanFileV2(f,false).then(function(r){ ' +
+    '          try{ var sk=document.getElementById("%0:s_decode_sink"); if(sk) sk.innerHTML=""; }catch(e){} ' +
+    '          resolve(r.decodedText||r.text); ' +
+    '        }).catch(reject); ' +
     '      },"image/png"); ' +
     '    }); ' +
     '  }); ' +
