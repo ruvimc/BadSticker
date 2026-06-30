@@ -92,7 +92,7 @@ type
       FBlocksWorkflowIsStarted: Boolean;
     FCurrentEquipAction, FCurrentEquipActionPrefix, FFixComment: string;
     FRollInfoJson, FRollStatusJson, FBlockInfoJson, FEquipFixListJson,
-     FEquipFixStatusesJson, FPersonEqupmentId: string;
+     FEquipFixStatusesJson: string;
     FIsAfterLogin: Boolean;
     FRashodnikId, FFixId, FServiceTab: Integer;
     FInfoMode, FBlockMode, FBlockAssignMode, FBlockWorkflowMode, FEquipReassignMode,
@@ -164,6 +164,7 @@ type
     function GetEquipStartEvent(AEquipid: string): string;
     function GetPersonEquipId: string;
     function IsEquipOverridden: Boolean;
+    function CanChangeEquipBinding: Boolean;
     procedure ClearEquipOverride;
     procedure SyncPersonEquipUI;
     procedure ResetEquipDisplayForNewOperation;
@@ -1390,42 +1391,46 @@ begin
   else
   if EventName = 'equipOverrideLongPress' then
   begin
-    if not IsEquipOverridden then
+    if not IsPersonEquipAssigned then
       Exit;
+    if not CanChangeEquipBinding then
+    begin
+      Toast('Смена оборудования только в начальном состоянии. Сбросьте операцию.');
+      Exit;
+    end;
     UniSession.AddJS(
-      'if(confirm("Вернуть оборудование по умолчанию?"))' +
+      'if(confirm("Снять привязку оборудования?"))' +
       'ajaxRequest(window[' + QuotedStr(pnlScan.JSName) + '],"equipOverrideReset",[]);'
     );
   end
   else
   if EventName = 'equipLongPress' then
   begin
-    if not IsPersonEquipAssigned then
+    if IsPersonEquipAssigned then
+      Exit;
+    if not CanChangeEquipBinding then
     begin
-      Toast('Смена оборудования недоступна: нет привязки в профиле');
+      Toast('Смена оборудования только в начальном состоянии. Сбросьте операцию.');
       Exit;
     end;
-    if IsEquipOverridden then
-      Exit;
-    Toast('Удержание: смена оборудования');
     UniSession.AddJS(
-      'if(confirm("Вы собираетесь сменить оборудование. Продолжить?"))' +
+      'if(confirm("Привязать оборудование? Отсканируйте QR станка."))' +
       'ajaxRequest(window[' + QuotedStr(pnlScan.JSName) + '],"equipReassignConfirm",[]);'
     );
   end
   else
   if EventName = 'equipReassignConfirm' then
   begin
-    if not IsPersonEquipAssigned then
+    if not CanChangeEquipBinding then
       Exit;
     FEquipReassignMode := True;
     ToggleCamera(True);
-    Toast('Отсканируйте QR нового оборудования');
+    Toast('Отсканируйте QR оборудования (e + номер)');
   end
   else
   if EventName = 'equipOverrideReset' then
   begin
-    if IsEquipOverridden then
+    if IsPersonEquipAssigned then
       ClearEquipOverride;
   end
   else
@@ -1719,7 +1724,8 @@ begin
         RollActionButtons(True, False)
       end;
       GetBusyEquipData(FCurrentEquipId);
-      GetBlockInfo(FBusyEquipBlockId.Substring(1).ToInteger);
+      if not FBusyEquipBlockId.IsEmpty then
+        GetBlockInfo(FBusyEquipBlockId.Substring(1).ToInteger);
       // Проверка, если начат новый рулон на данном оборудовании, то позволяет начать игнорируя не законченный
       if not FBusyEquipRollId.Equals(FCurrentUniqRollId) then
       begin
@@ -1844,24 +1850,30 @@ end;
 }
 
 function TMainmForm.IsPersonEquipAssigned: Boolean;
+var
+  LId: string;
 begin
-  Result := not FPersonEqupmentId.IsEmpty;
+  LId := Trim(Cookie(COOKIE_EQUIP_OVERRIDE));
+  Result := (LId <> '') and (LId <> '-');
 end;
 
 function TMainmForm.GetPersonEquipId: string;
 var
-  LOverride: string;
+  LId: string;
 begin
-  Result := FPersonEqupmentId;
+  LId := Trim(Cookie(COOKIE_EQUIP_OVERRIDE));
+  if (LId = '') or (LId = '-') then
+    Exit('');
+  Result := NormalizeEquipQr(LId);
   if Result.IsEmpty then
-    Exit;
-  LOverride := Trim(Cookie(COOKIE_EQUIP_OVERRIDE));
-  if (LOverride <> '') and (LOverride <> '-') then
-  begin
-    LOverride := NormalizeEquipQr(LOverride);
-    if not LOverride.IsEmpty then
-      Result := LOverride;
-  end;
+    Result := LId;
+end;
+
+function TMainmForm.CanChangeEquipBinding: Boolean;
+begin
+  Result := not FRollMode and not FBlockMode and not FEquipMode and not FInfoMode
+    and not FEquipReassignMode and not FBlockAssignMode and not FBlockWorkflowMode
+    and not FHasScannedEquipInSession;
 end;
 
 function TMainmForm.IsBlockCanFinishRoll(ABlockId: string): Boolean;
@@ -1870,18 +1882,19 @@ begin
 end;
 
 function TMainmForm.IsEquipOverridden: Boolean;
-var
-  LOverride: string;
 begin
-  LOverride := Trim(Cookie(COOKIE_EQUIP_OVERRIDE));
-  Result := IsPersonEquipAssigned and (LOverride <> '') and (LOverride <> '-');
+  Result := IsPersonEquipAssigned;
 end;
 
 procedure TMainmForm.ClearEquipOverride;
 begin
   Cookie(COOKIE_EQUIP_OVERRIDE, '-');
-  SyncPersonEquipUI;
-  Toast('Оборудование по умолчанию восстановлено');
+  ResetEquipDisplayForNewOperation;
+  UniSession.AddJS(
+    Format('var p=window[%s];if(p&&p.setEquipOverrideBadge)p.setEquipOverrideBadge(false);',
+    [QuotedStr(pnlScan.JSName)]));
+  SetEquipCaption('-');
+  Toast('Привязка оборудования снята');
 end;
 
 procedure TMainmForm.ResetEquipDisplayForNewOperation;
@@ -1970,7 +1983,7 @@ begin
       'window.__bsPendingPanelUi[k]=Object.assign(window.__bsPendingPanelUi[k]||{},bag);' +
       'setTimeout(function(){var p2=window[k];if(p2&&p2._flushPendingPanelUi)p2._flushPendingPanelUi();},600);}})();',
       [QuotedStr(pnlScan.JSName), QuotedStr(FCurrentEquipName),
-       IfThen(IsEquipOverridden, 'true', 'false')]));
+       IfThen(IsPersonEquipAssigned, 'true', 'false')]));
 end;
 
 function TMainmForm.IsRollFinished: Boolean;
@@ -1986,7 +1999,6 @@ begin
   LUserId := Concat(QR_CODE_USER_DELIM, AQRUserId);
   qryPresonName.ParamByName('person_id').AsString := LUserId;
   qryPresonName.Open;
-  FPersonEqupmentId := qryPresonName.FieldByName('person_equip_id').AsString;
   Result := qryPresonName.FieldByName('person_id').AsString = LUserId;
   if Result then
     FPersonFio := qryPresonName.FieldByName('person_fio').AsString;
