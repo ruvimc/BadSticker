@@ -520,12 +520,31 @@ begin
     'document.addEventListener("click", function(){ if(drop) drop.style.display="none"; }, {once:false});' +
 
     // Отрисовка таблицы
+    'window._svcFixEditMode=!!%11:d;' +
+    'window._editFixComment=function(fid,cur){ ' +
+    '  var nv=prompt("Комментарий к записи:", cur||""); ' +
+    '  if(nv===null) return; nv=String(nv).trim(); ' +
+    '  if(!nv){ alert("Комментарий не может быть пустым"); return; } ' +
+    '  ajaxRequest(%6:s,"equipFixCommentEdit",["fixId="+fid,"comment="+encodeURIComponent(nv)]); ' +
+    '}; ' +
     'var draw=function(da){ b.innerHTML=""; da.forEach(function(r){ ' +
     '  var tr=b.insertRow(); tr.style.background="rgba(255,255,255,0.03)"; ' +
-    '  var ks=Object.keys(r); ks.forEach(function(k,i){ ' +
-    '    var td=tr.insertCell(); td.style.padding="15px 12px"; td.innerText=r[k]; ' +
-    '    if(i===0) td.style.borderRadius="12px 0 0 12px"; if(i===ks.length-1) td.style.borderRadius="0 12px 12px 0";' +
-    '  }); }); }; draw(d);' +
+    '  if(window._svcFixEditMode && window._activeTab===1){ ' +
+    '    ["equipment_name","name","datecreate"].forEach(function(k,i){ ' +
+    '      var td=tr.insertCell(); td.style.padding="15px 12px"; td.innerText=r[k]||""; ' +
+    '      if(i===0) td.style.borderRadius="12px 0 0 12px"; if(i===2) td.style.borderRadius="0 12px 12px 0"; ' +
+    '      if(k==="name" && r.id){ var fid=r.id, ft=r.name||"", fx=String(r.equip_fix_id||""); td.style.cursor="pointer"; ' +
+    '        if(fx==="1") td.style.color="#4cf5bd"; else if(fx==="2") td.style.color="#ffc461"; ' +
+    '        td.title="Нажмите, чтобы изменить"; td.onclick=function(ev){ ev.stopPropagation(); window._editFixComment(fid, ft); }; } ' +
+    '    }); ' +
+    '  } else { ' +
+    '    var ks=Object.keys(r).filter(function(k){ return k!=="id" && k!=="equip_fix_id"; }); ' +
+    '    ks.forEach(function(k,i){ ' +
+    '      var td=tr.insertCell(); td.style.padding="15px 12px"; td.innerText=r[k]; ' +
+    '      if(i===0) td.style.borderRadius="12px 0 0 12px"; if(i===ks.length-1) td.style.borderRadius="0 12px 12px 0";' +
+    '    }); ' +
+    '  } ' +
+    '}); }; draw(d);' +
 
     // Кнопка "+" и звук
     'var timer=null; document.getElementById("%0:s_add").onclick=function(){ ' +
@@ -562,7 +581,8 @@ begin
      AActiveTabIndex,
      Ord(AFixInRepair),
      AFixPutId,
-     AFixRemoveId
+     AFixRemoveId,
+     Ord(AFixButtonsMode)
     ]);
 
   UniSession.AddJS(LJS);

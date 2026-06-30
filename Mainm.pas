@@ -122,6 +122,7 @@ type
     procedure RollCompleteEffect;
     procedure UpdateEquipService(AParams: TUniStrings);
     procedure UpdateEquipFix(AFixStatusId: Integer);
+    procedure UpdateEquipFixComment(AFixRowId: Integer; const AComment: string);
     procedure ToggleCamera(AOnOff: Boolean);
     //procedure RefreshCameraList; deprecated;}
     //procedure ShowInfoPanel(ATableDataJson: string);
@@ -212,6 +213,9 @@ const
 
   INSERT_EQUIP_FIX_LIST_SQL = 'INSERT INTO equipment_fix_list (equip_id, equip_fix_id, datecreate, comment) ' +
     'VALUES (''%s'', %d, NOW(), ''%s'')';
+
+  UPDATE_EQUIP_FIX_COMMENT_SQL =
+    'UPDATE equipment_fix_list SET comment = %s WHERE id = %d AND SUBSTRING_INDEX(equip_id, ''*'', 1) = %s';
 
   INSERT_PERSON_WORKFLOW_STATUS = 'INSERT INTO person_workflow (person_id, status, datecreate) ' +
     'VALUES (''%s'', %d, NOW())';
@@ -735,6 +739,27 @@ begin
   FastExecSQL(Format(INSERT_EQUIP_FIX_LIST_SQL, [LEquipKey, AFixStatusId, LComment]));
 end;
 
+procedure TMainmForm.UpdateEquipFixComment(AFixRowId: Integer; const AComment: string);
+var
+  LEquipKey, LComment: string;
+begin
+  if AFixRowId <= 0 then
+    raise Exception.Create('Invalid repair record');
+  LComment := Trim(AComment);
+  if LComment.IsEmpty then
+    raise Exception.Create('Comment cannot be empty');
+  if Length(LComment) > 255 then
+    raise Exception.Create('Comment is too long');
+  LEquipKey := ResolveEquipStorageId(FCurrentEquipId);
+  if LEquipKey.IsEmpty then
+    LEquipKey := Trim(FCurrentEquipId);
+  if LEquipKey.IsEmpty then
+    raise Exception.Create('Equipment not selected');
+  LComment := StringReplace(LComment, '''', '''''', [rfReplaceAll]);
+  FastExecSQL(Format(UPDATE_EQUIP_FIX_COMMENT_SQL,
+    [QuotedStr(LComment), AFixRowId, QuotedStr(LEquipKey)]));
+end;
+
 procedure TMainmForm.UpdateInfoBadge(const AText: string);
 begin
   UniSession.AddJS
@@ -962,7 +987,7 @@ begin
   end;
   qryEquipFixList.ParamByName('eqId').AsString := LEquipKey;
   qryEquipFixList.Open;
-  FEquipFixListJson := qryEquipFixList.ToJSON(['equipment_name', 'name', 'datecreate']);
+  FEquipFixListJson := qryEquipFixList.ToJSON(['id', 'equipment_name', 'name', 'datecreate', 'equip_fix_id']);
   FFixId := 0;
   if not qryEquipFixList.IsEmpty then
   begin
@@ -1327,6 +1352,21 @@ begin
         Toast(MSG_EQUIP_PUT_REPAIR_OK)
       else if FFixId = Ord(efsFixEnd) then
         Toast(MSG_EQUIP_REMOVE_REPAIR_OK);
+      FastShowEquipFixPanel;
+      ToggleCamera(False);
+    except
+      on E: Exception do
+        Toast('Ошибка: ' + E.Message);
+    end;
+  end
+  else
+  if EventName = 'equipFixCommentEdit' then
+  begin
+    FServiceTab := 1;
+    try
+      UpdateEquipFixComment(Params['fixId'].AsInteger,
+        TNetEncoding.URL.Decode(Params['comment'].Value));
+      Toast('Комментарий сохранён');
       FastShowEquipFixPanel;
       ToggleCamera(False);
     except

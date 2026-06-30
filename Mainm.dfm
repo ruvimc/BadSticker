@@ -2090,7 +2090,7 @@ object MainmForm: TMainmForm
   object qryEquipFixList: TMyQuery
     SQL.Strings = (
       
-        'SELECT e.equipment_name, efl.comment AS name, efl.datecreate, efl.equip_fix_id'
+        'SELECT efl.id, e.equipment_name, efl.comment AS name, efl.datecreate, efl.equip_fix_id'
       ' FROM equipment_fix_list efl'
       'LEFT JOIN equipment e ON SUBSTRING_INDEX(efl.equip_id, '#39'*'#39', 1) = e.equipment_id'
       'WHERE SUBSTRING_INDEX(efl.equip_id, '#39'*'#39', 1) = :eqId'
